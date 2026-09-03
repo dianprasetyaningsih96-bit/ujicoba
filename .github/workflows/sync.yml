@@ -1,0 +1,26 @@
+name: Sync to aristamartavalutanew
+
+on:
+  push:
+    branches:
+      - main # Ganti dengan 'master' jika branch utama Anda bernama master
+
+jobs:
+  sync-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo sumber
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Mengambil seluruh riwayat commit
+
+      - name: Push perubahan ke repo tujuan
+        env:
+          TOKEN: ${{ secrets.DEST_REPO_TOKEN }}
+        run: |
+          # Tambahkan repository tujuan sebagai remote
+          git remote add destination https://dianprasetyaningsih96-bit:${TOKEN}@github.com/dianprasetyaningsih96-bit/aristamartavalutanew.git
+          
+          # Push branch dan tag ke repository tujuan
+          git push --force destination "${GITHUB_REF_NAME}"
+          git push --tags destination
