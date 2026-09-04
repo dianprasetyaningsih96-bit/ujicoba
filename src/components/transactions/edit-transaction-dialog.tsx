@@ -6,14 +6,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 export function EditTransactionDialog({ 
   transaction, 
+  customers,
   open, 
   onOpenChange,
   onSaved
 }: {
   transaction: any;
+  customers: any[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
@@ -24,6 +30,7 @@ export function EditTransactionDialog({
   const [idr, setIdr] = useState("");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState("");
+  const [customerId, setCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (transaction && open) {
@@ -31,8 +38,8 @@ export function EditTransactionDialog({
       setRate(transaction.rate.toString());
       setIdr(transaction.idr_amount.toString());
       setNotes(transaction.notes || "");
-      // Format datetime-local requires YYYY-MM-DDThh:mm
-      // ISO string is usually in UTC, so we should convert it carefully
+      setCustomerId(transaction.customer_id);
+      
       const tzoffset = (new Date()).getTimezoneOffset() * 60000;
       const localISOTime = (new Date(new Date(transaction.transaction_date).getTime() - tzoffset)).toISOString().slice(0, -1);
       setDate(localISOTime.slice(0, 16));
@@ -57,7 +64,7 @@ export function EditTransactionDialog({
         p_foreign_amount: parseFloat(foreign),
         p_idr_amount: parseFloat(idr),
         p_rate: parseFloat(rate),
-        p_customer_id: transaction.customer_id,
+        p_customer_id: customerId,
         p_notes: notes,
         p_date: new Date(date).toISOString()
       });
@@ -85,6 +92,67 @@ export function EditTransactionDialog({
             <Label>Waktu Transaksi</Label>
             <Input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
+          
+          <div className="grid gap-2">
+            <Label>Nasabah</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className={cn(
+                    "w-full justify-between font-normal",
+                    !customerId && "text-muted-foreground"
+                  )}
+                >
+                  {!customerId
+                    ? "Walk-in (tanpa nasabah terdaftar)"
+                    : customers.find((c) => c.id === customerId)
+                      ? ${customers.find((c) => c.id === customerId)?.customer_code} - 
+                      : "Pilih nasabah"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                <Command>
+                  <CommandInput placeholder="Cari nasabah..." />
+                  <CommandList>
+                    <CommandEmpty>Nasabah tidak ditemukan.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="walk-in"
+                        onSelect={() => setCustomerId(null)}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            !customerId ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        Walk-in (tanpa nasabah terdaftar)
+                      </CommandItem>
+                      {customers.map((c) => (
+                        <CommandItem
+                          key={c.id}
+                          value={${c.customer_code} }
+                          onSelect={() => setCustomerId(c.id)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              customerId === c.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {c.customer_code} - {c.full_name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Nominal Valas ({transaction.currencies?.code})</Label>

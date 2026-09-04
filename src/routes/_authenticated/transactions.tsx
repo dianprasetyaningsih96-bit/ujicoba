@@ -1567,6 +1567,7 @@ function TransactionsPage() {
           if (!o) setEditing(null);
         }}
         transaction={editing}
+        customers={customers}
         onSaved={() => {
           load();
         }}
