@@ -1,0 +1,55 @@
+name: Otomatisasi Backup Database Supabase
+
+on:
+  schedule:
+    # Berjalan otomatis setiap hari Minggu jam 00:00 UTC (08:00 WITA / Pagi waktu Bali)
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # Mengizinkan Anda menekan tombol "Run" manual kapan saja
+
+jobs:
+  backup:
+    name: Backup PostgreSQL Database
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Eksekusi pg_dump
+        env:
+          PGHOST: ${{ secrets.SUPABASE_DB_HOST }}
+          PGPORT: 5432
+          PGDATABASE: postgres
+          PGUSER: ${{ secrets.SUPABASE_DB_USER }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          FILENAME="valuta_backup_${TIMESTAMP}.sql.gz"
+          echo "Memulai proses dump database ke file ${FILENAME}..."
+          pg_dump --clean --if-exists --quote-all-identifiers \
+            --exclude-schema=graphql \
+            --exclude-schema=graphql_public \
+            --exclude-schema=pgbouncer \
+            --exclude-schema=pgsodium \
+            --exclude-schema=pgsodium_masks \
+            --exclude-schema=realtime \
+            --exclude-schema=supabase_functions \
+            --exclude-schema=vault \
+            | gzip > "${FILENAME}"
+          echo "BACKUP_FILE=${FILENAME}" >> $GITHUB_ENV
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
+
+      # Simpan sebagai file Release permanen di GitHub (bisa diunduh kapan saja)
+      - name: Simpan ke GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: backup-${{ env.TIMESTAMP }}
+          name: "Database Backup - ${{ env.TIMESTAMP }}"
+          body: "Backup otomatis database Supabase pada ${{ env.TIMESTAMP }}."
+          files: ${{ env.BACKUP_FILE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
