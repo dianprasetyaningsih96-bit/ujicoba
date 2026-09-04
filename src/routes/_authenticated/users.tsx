@@ -14,7 +14,6 @@ import {
   SUPABASE_PUBLISHABLE_KEY,
 } from "@/integrations/supabase/config";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
-import { useCangguExclusion } from "@/hooks/use-canggu-exclusion";
 import { MasterPageHeader } from "@/components/master-data/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,7 +83,6 @@ const ROLE_STYLES: Record<AppRole, string> = {
 
 function UsersPage() {
   const { user, roles: myRoles, loading: userLoading } = useCurrentUser();
-  const { filterBranches, filterData } = useCangguExclusion();
   const canManage = hasAnyRole(myRoles, ["super_admin", "owner"]);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -250,9 +248,9 @@ function UsersPage() {
       ]);
     if (pe) toast.error("Gagal memuat user", { description: pe.message });
     if (re) toast.error("Gagal memuat role", { description: re.message });
-    setProfiles(filterData((p as Profile[]) ?? []));
+    setProfiles((p as Profile[]) ?? []);
     setRoles((r as RoleRow[]) ?? []);
-    setBranches(filterBranches((b as Branch[]) ?? []));
+    setBranches((b as Branch[]) ?? []);
     setLoading(false);
   }
 

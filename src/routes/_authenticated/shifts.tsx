@@ -5,7 +5,6 @@ import { Clock, LogIn, LogOut, Play, Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { useCangguExclusion } from "@/hooks/use-canggu-exclusion";
 import { MasterPageHeader } from "@/components/master-data/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,7 +67,6 @@ function formatDateTime(s: string | null) {
 
 function ShiftsPage() {
   const { user, profile, roles } = useCurrentUser();
-  const { filterBranches, filterData } = useCangguExclusion();
   const { settings } = useAppSettings();
   const isManager = hasAnyRole(roles, ["super_admin", "branch_manager", "owner"]);
 
@@ -105,9 +103,9 @@ function ShiftsPage() {
     if (s.error) {
       toast.error("Gagal memuat shif: " + s.error.message);
     }
-    setBranches(filterBranches((b.data as Branch[]) ?? []));
+    setBranches((b.data as Branch[]) ?? []);
     setCurrencies((c.data as Currency[]) ?? []);
-    let rows = filterData((s.data as unknown as ShiftRow[]) ?? []);
+    let rows = (s.data as unknown as ShiftRow[]) ?? [];
     const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
     if (userIds.length > 0) {
       const { data: profs } = await supabase

@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
-import { useCangguExclusion } from "@/hooks/use-canggu-exclusion";
 import { MasterPageHeader } from "@/components/master-data/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -132,7 +131,6 @@ function fmt(n: number, decimals = 2) {
 
 function CashPage() {
   const { roles, user, profile } = useCurrentUser();
-  const { filterBranches, filterData } = useCangguExclusion();
   const isSuperAdmin = hasAnyRole(roles, ["super_admin", "owner"]);
   const canWrite = hasAnyRole(roles, [
     "super_admin",
@@ -187,14 +185,12 @@ function CashPage() {
         .eq("is_active", true)
         .order("code"),
     ]);
-    setBranches(filterBranches((b as Branch[]) ?? []));
+    setBranches((b as Branch[]) ?? []);
     setCurrencies((c as Currency[]) ?? []);
     if (lockedBranchId) {
       setBranchId(lockedBranchId);
     } else if (!branchId && b && b.length > 0) {
-      // Pick first non-excluded branch
-      const firstBranch = filterBranches((b as Branch[]) ?? [])[0];
-      if (firstBranch) setBranchId(firstBranch.id);
+      setBranchId(b[0].id);
     }
   }
 
@@ -230,9 +226,9 @@ function CashPage() {
     ]);
     if (e1) toast.error("Gagal memuat saldo", { description: e1.message });
     if (e2) toast.error("Gagal memuat mutasi", { description: e2.message });
-    setBalances(filterData((bal as Balance[]) ?? []));
-    setMovements(filterData((mv as Movement[]) ?? []));
-    setTransfers(filterData((trfs as unknown as BranchTransferInfo[]) ?? []));
+    setBalances((bal as Balance[]) ?? []);
+    setMovements((mv as Movement[]) ?? []);
+    setTransfers((trfs as unknown as BranchTransferInfo[]) ?? []);
     setMovPage(1); // reset halaman saat cabang berganti
   }
 
