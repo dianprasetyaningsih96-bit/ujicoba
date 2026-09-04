@@ -108,7 +108,7 @@ export function EditTransactionDialog({
                   {!customerId
                     ? "Walk-in (tanpa nasabah terdaftar)"
                     : customers.find((c) => c.id === customerId)
-                      ? ${customers.find((c) => c.id === customerId)?.customer_code} - 
+                      ? `${customers.find((c) => c.id === customerId)?.customer_code} - ${customers.find((c) => c.id === customerId)?.full_name}`
                       : "Pilih nasabah"}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -134,7 +134,7 @@ export function EditTransactionDialog({
                       {customers.map((c) => (
                         <CommandItem
                           key={c.id}
-                          value={${c.customer_code} }
+                          value={`${c.customer_code} ${c.full_name}`}
                           onSelect={() => setCustomerId(c.id)}
                         >
                           <Check
