@@ -606,7 +606,7 @@ function DashboardPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={currencyMix} dataKey="raw" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                  <Pie data={currencyMix} dataKey="raw" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2} minAngle={10}>
                     {currencyMix.map((_, i) => (
                       <Cell key={i} fill={pieColors[i % pieColors.length]} />
                     ))}
