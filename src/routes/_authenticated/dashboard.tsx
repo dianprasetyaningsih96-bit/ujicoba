@@ -62,7 +62,6 @@ import {
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { useCangguExclusion } from "@/hooks/use-canggu-exclusion";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -101,12 +100,19 @@ const compactIdr = (n: number) => {
 };
 
 const pieColors = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-  "var(--muted-foreground)",
+  "#2563eb", // Blue
+  "#dc2626", // Red
+  "#16a34a", // Green
+  "#d97706", // Orange
+  "#7c3aed", // Purple
+  "#0891b2", // Cyan
+  "#db2777", // Pink
+  "#ea580c", // Dark Orange
+  "#65a30d", // Lime
+  "#4f46e5", // Indigo
+  "#0d9488", // Teal
+  "#9333ea", // Purple
+  "#e11d48", // Rose
 ];
 
 interface Branch {
@@ -155,7 +161,6 @@ function statusVariant(
 
 function DashboardPage() {
   const { roles, profile } = useCurrentUser();
-  const { filterBranches, filterData } = useCangguExclusion();
   const isTellerOnly =
     roles.length > 0 && roles.every((r) => r === "teller");
   const lockedBranchId = isTellerOnly ? profile?.branch_id ?? null : null;
@@ -176,8 +181,8 @@ function DashboardPage() {
   useEffect(() => {
     let q = supabase.from("branches").select("id, code, name").order("name");
     if (lockedBranchId) q = q.eq("id", lockedBranchId);
-    q.then(({ data }) => setBranches(filterBranches((data as Branch[]) ?? [])));
-  }, [lockedBranchId, filterBranches]);
+    q.then(({ data }) => setBranches((data as Branch[]) ?? []));
+  }, [lockedBranchId]);
 
   useEffect(() => {
     if (lockedBranchId) setBranchFilter(lockedBranchId);
@@ -245,7 +250,7 @@ function DashboardPage() {
     const codeOf = (id: string | null) => (id ? curMap.get(id) ?? "?" : "?");
 
     setTxs(
-      filterData((txR.data as any[]) ?? []).map((t) => ({
+      ((txR.data as any[]) ?? []).map((t) => ({
         id: t.id,
         transaction_number: t.transaction_no,
         transaction_date: t.transaction_date,
@@ -258,7 +263,7 @@ function DashboardPage() {
         customer_id: t.customer_id,
       })),
     );
-    setMonthlyTxs(filterData(((mR.data as any[]) ?? []) as TransactionRow[]));
+    setMonthlyTxs(((mR.data as any[]) ?? []) as TransactionRow[]);
     setRates(
       ((rR.data as any[]) ?? []).map((r) => ({
         currency_code: codeOf(r.currency_id),
@@ -268,7 +273,7 @@ function DashboardPage() {
       })),
     );
     setCash(
-      filterData((cR.data as any[]) ?? []).map((c) => ({
+      ((cR.data as any[]) ?? []).map((c) => ({
         currency_code: codeOf(c.currency_id),
         balance: Number(c.balance),
         branch_id: c.branch_id,
@@ -393,16 +398,11 @@ function DashboardPage() {
         value: total ? Math.round((v / total) * 100) : 0,
         raw: v,
       }));
-    const top = entries.slice(0, 5);
-    const rest = entries.slice(5);
-    if (rest.length) {
-      top.push({
-        name: "Lainnya",
-        value: rest.reduce((a, b) => a + b.value, 0),
-        raw: rest.reduce((a, b) => a + b.raw, 0),
-      });
-    }
-    return top;
+    // We filter out those with 0 value if there are any tiny ones, 
+    // but the user wants to see all. Since `value` is rounded to nearest int, 
+    // it could be 0%. We should show at least 1% or just rely on `raw` value for rendering.
+    // If we want it to always be visible in the donut, maybe don't filter it out, just return `entries`.
+    return entries;
   }, [filteredTxs]);
 
   const latestRates = useMemo(() => {
@@ -606,12 +606,12 @@ function DashboardPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={currencyMix} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                  <Pie data={currencyMix} dataKey="raw" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
                     {currencyMix.map((_, i) => (
                       <Cell key={i} fill={pieColors[i % pieColors.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => `${v}%`} />
+                  <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} formatter={(v: number, name: string, props: any) => [`${idr(v)} (${props.payload.value}%)`, name]} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
