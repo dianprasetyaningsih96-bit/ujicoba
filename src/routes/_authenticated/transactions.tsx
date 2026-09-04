@@ -13,6 +13,7 @@ import {
   ChevronsUpDown,
   Ban,
   Trash2,
+  Pencil,
   Printer,
   FileDown,
   AlertTriangle,
@@ -21,6 +22,7 @@ import {
 import { Plus, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CustomerForm } from "@/components/customers/customer-form";
+import { EditTransactionDialog } from "@/components/transactions/edit-transaction-dialog";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { COUNTRIES } from "@/lib/countries";
@@ -269,6 +271,8 @@ function TransactionsPage() {
   const [voiding, setVoiding] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [showAddCustomer, setShowAddCustomer] = useState(false);
 
@@ -858,14 +862,24 @@ function TransactionsPage() {
                           </Button>
                         )}
                         {isSuperAdmin && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setDeleting(r)}
-                            title="Hapus transaksi"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setEditing(r)}
+                              title="Edit transaksi"
+                            >
+                              <Pencil className="h-4 w-4 text-primary" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setDeleting(r)}
+                              title="Hapus transaksi"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -1546,6 +1560,17 @@ function TransactionsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <EditTransactionDialog
+        open={!!editing}
+        onOpenChange={(o) => {
+          if (!o) setEditing(null);
+        }}
+        transaction={editing}
+        onSaved={() => {
+          load();
+        }}
+      />
     </div>
   );
 }
