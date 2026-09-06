@@ -5,6 +5,13 @@ import {
   printPdf,
 } from "./pdf";
 
+export interface ReceiptItem {
+  currency: string;
+  foreign_amount: number;
+  rate: number;
+  idr_amount: number;
+}
+
 export interface ReceiptData {
   transaction_no: string;
   transaction_date: string;
@@ -18,9 +25,10 @@ export interface ReceiptData {
     date_of_birth?: string | null;
     place_of_birth?: string | null;
   } | null;
-  currency: string;
-  foreign_amount: number;
-  rate: number;
+  items?: ReceiptItem[];
+  currency?: string;
+  foreign_amount?: number;
+  rate?: number;
   idr_amount: number;
   payment_method?: string;
   teller_name?: string;
@@ -66,9 +74,19 @@ export function buildReceiptHtml(r: ReceiptData): string {
   const custOccupation = (r.customer?.occupation || "-").toUpperCase();
   const custDateBirth = formatBirthDate(r.customer?.date_of_birth);
   const custPlaceBirth = (r.customer?.place_of_birth || "-").toUpperCase();
-  const currStr = r.currency.toUpperCase();
-  const fAmountStr = fmtNum(r.foreign_amount, 2);
-  const rateStr = fmtNum(r.rate, 2);
+  const items: ReceiptItem[] =
+    r.items && r.items.length > 0
+      ? r.items
+      : r.currency
+        ? [
+            {
+              currency: r.currency,
+              foreign_amount: r.foreign_amount ?? 0,
+              rate: r.rate ?? 0,
+              idr_amount: r.idr_amount,
+            },
+          ]
+        : [];
   const idrStr = new Intl.NumberFormat("id-ID").format(Math.round(r.idr_amount));
   const outlet = (r.branch?.name || r.branch?.code || "-").toUpperCase();
   const payType = (r.payment_method || "Cash").toUpperCase();
@@ -246,11 +264,19 @@ export function buildReceiptHtml(r: ReceiptData): string {
     </div>
     <div class="divider"></div>
 
-    <div class="rate-row">
-      <span>${currStr} ${fAmountStr}</span>
-      <span>x ${rateStr} =</span>
-      <span>${idrStr}</span>
-    </div>
+    ${items
+      .map((it) => {
+        const itCurr = (it.currency || "").toUpperCase();
+        const itFAmount = fmtNum(it.foreign_amount, 2);
+        const itRate = fmtNum(it.rate, 2);
+        const itIdr = new Intl.NumberFormat("id-ID").format(Math.round(it.idr_amount));
+        return `<div class="rate-row">
+      <span>${itCurr} ${itFAmount}</span>
+      <span>x ${itRate} =</span>
+      <span>${itIdr}</span>
+    </div>`;
+      })
+      .join("\n    ")}
     <div class="divider"></div>
 
     <div class="total-box">
@@ -390,20 +416,37 @@ export function generateReceiptPdf(r: ReceiptData) {
   y += 4.0;
   divider();
 
-  const currStr = r.currency.toUpperCase();
-  const fAmountStr = fmtNum(r.foreign_amount, 2);
-  const rateStr = `x ${fmtNum(r.rate, 2)} =`;
+  const items: ReceiptItem[] =
+    r.items && r.items.length > 0
+      ? r.items
+      : r.currency
+        ? [
+            {
+              currency: r.currency,
+              foreign_amount: r.foreign_amount ?? 0,
+              rate: r.rate ?? 0,
+              idr_amount: r.idr_amount,
+            },
+          ]
+        : [];
   const idrStr = new Intl.NumberFormat("id-ID").format(Math.round(r.idr_amount));
 
-  const leftSide = `${currStr} ${fAmountStr}`;
-  const rightSide = idrStr;
-  const remaining = 40 - leftSide.length - rateStr.length - rightSide.length;
-  const leftPad = Math.max(1, Math.floor(remaining / 2));
-  const rightPad = Math.max(1, remaining - leftPad);
-  const rowText = leftSide + " ".repeat(leftPad) + rateStr + " ".repeat(rightPad) + rightSide;
+  for (const it of items) {
+    const currStr = (it.currency || "").toUpperCase();
+    const fAmountStr = fmtNum(it.foreign_amount, 2);
+    const rateStr = `x ${fmtNum(it.rate, 2)} =`;
+    const itIdrStr = new Intl.NumberFormat("id-ID").format(Math.round(it.idr_amount));
 
-  text(rowText, width / 2, 6.8, "center", false);
-  y += 4.2;
+    const leftSide = `${currStr} ${fAmountStr}`;
+    const rightSide = itIdrStr;
+    const remaining = 40 - leftSide.length - rateStr.length - rightSide.length;
+    const leftPad = Math.max(1, Math.floor(remaining / 2));
+    const rightPad = Math.max(1, remaining - leftPad);
+    const rowText = leftSide + " ".repeat(leftPad) + rateStr + " ".repeat(rightPad) + rightSide;
+
+    text(rowText, width / 2, 6.8, "center", false);
+    y += 4.0;
+  }
   divider();
 
   text("TOTAL RP =", right - doc.getTextWidth(idrStr) - 3, 7, "right", true);

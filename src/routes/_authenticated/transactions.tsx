@@ -91,6 +91,16 @@ type TxType = "buy" | "sell";
 type TxStatus = "draft" | "completed" | "voided";
 type PayMethod = "cash" | "transfer" | "other";
 
+interface TransactionItemRow {
+  id: string;
+  transaction_id: string;
+  currency_id: string;
+  foreign_amount: number;
+  rate: number;
+  idr_amount: number;
+  currencies?: { code: string; name: string } | null;
+}
+
 interface Transaction {
   id: string;
   transaction_no: string;
@@ -123,6 +133,7 @@ interface Transaction {
     place_of_birth?: string | null;
   } | null;
   profiles?: { full_name: string | null } | null;
+  transaction_items?: TransactionItemRow[];
 }
 
 interface CurrencyOpt {
@@ -164,30 +175,42 @@ interface ActiveShift {
 const HQ = "__hq__";
 const NO_CUSTOMER = "__walkin__";
 
-const schema = z.object({
-  transaction_type: z.enum(["buy", "sell"]),
-  currency_id: z.string().uuid("Pilih mata uang"),
-  branch_id: z.string(),
-  customer_id: z.string(),
-  rate: z.coerce.number().positive("Kurs harus > 0"),
-  foreign_amount: z.coerce.number().positive("Nominal valas harus > 0"),
-  payment_method: z.enum(["cash", "transfer", "other"]),
-  notes: z.string().trim().max(500).optional().or(z.literal("")),
-  transaction_date: z.string().optional().or(z.literal("")),
+interface FormCurrencyItem {
+  id: string;
+  currency_id: string;
+  foreign_amount: number;
+  rate: number;
+  foreignInput: string;
+  rateInput: string;
+}
+
+interface FormState {
+  transaction_type: TxType;
+  branch_id: string;
+  customer_id: string;
+  payment_method: PayMethod;
+  notes: string;
+  transaction_date: string;
+  items: FormCurrencyItem[];
+}
+
+const createEmptyItem = (): FormCurrencyItem => ({
+  id: Math.random().toString(36).substring(2, 9),
+  currency_id: "",
+  foreign_amount: 0,
+  rate: 0,
+  foreignInput: "",
+  rateInput: "",
 });
 
-type Form = z.infer<typeof schema>;
-
-const emptyForm = (): Form => ({
+const emptyForm = (): FormState => ({
   transaction_type: "buy",
-  currency_id: "",
   branch_id: HQ,
   customer_id: NO_CUSTOMER,
-  rate: 0,
-  foreign_amount: 0,
   payment_method: "cash",
   notes: "",
   transaction_date: "",
+  items: [createEmptyItem()],
 });
 
 const fmtIDR = (n: number) =>
@@ -260,10 +283,8 @@ function TransactionsPage() {
   const [filterStatus, setFilterStatus] = useState<"all" | TxStatus>("all");
 
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<Form>(emptyForm());
-  const [foreignInput, setForeignInput] = useState("");
+  const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
-  const [rateInput, setRateInput] = useState("");
 
   const [viewing, setViewing] = useState<Transaction | null>(null);
   const [mustPrint, setMustPrint] = useState(false);
@@ -280,7 +301,7 @@ function TransactionsPage() {
     let query = supabase
       .from("transactions")
       .select(
-        "*, currencies(code, name), branches(code, name, address, city, phone), customers(customer_code, full_name, nationality, occupation, date_of_birth, place_of_birth), profiles!teller_id(full_name)",
+        "*, currencies(code, name), branches(code, name, address, city, phone), customers(customer_code, full_name, nationality, occupation, date_of_birth, place_of_birth), profiles!teller_id(full_name), transaction_items(*, currencies(code, name))",
       )
       .order("transaction_date", { ascending: false })
       .limit(200);
@@ -348,34 +369,133 @@ function TransactionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Auto-suggest rate ketika mata uang / cabang / tipe berubah
-  useEffect(() => {
-    if (!form.currency_id) return;
-    const branchId = form.branch_id === HQ ? null : form.branch_id;
+  const getSuggestedRate = (
+    currId: string,
+    branchIdStr: string,
+    txType: TxType,
+  ) => {
+    if (!currId) return 0;
+    const bId = branchIdStr === HQ ? null : branchIdStr;
     const match =
-      rates.find(
-        (r) => r.currency_id === form.currency_id && r.branch_id === branchId,
-      ) ||
-      rates.find(
-        (r) => r.currency_id === form.currency_id && r.branch_id === null,
-      );
-    if (match) {
-      const suggested =
-        form.transaction_type === "buy"
-          ? Number(match.buy_rate)
-          : Number(match.sell_rate);
-      if (form.rate === 0 || form.rate === Number(match.buy_rate) || form.rate === Number(match.sell_rate)) {
-        setForm((f) => ({ ...f, rate: suggested }));
-        setRateInput(fmtNum(suggested, 0) + ",00");
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.currency_id, form.branch_id, form.transaction_type, rates]);
+      rates.find((r) => r.currency_id === currId && r.branch_id === bId) ||
+      rates.find((r) => r.currency_id === currId && r.branch_id === null);
+    if (!match) return 0;
+    return txType === "buy" ? Number(match.buy_rate) : Number(match.sell_rate);
+  };
 
-  const idrAmount = useMemo(
-    () => Number((form.rate * form.foreign_amount).toFixed(2)),
-    [form.rate, form.foreign_amount],
-  );
+  const handleItemCurrencyChange = (index: number, newCurrencyId: string) => {
+    setForm((prev) => {
+      const nextItems = [...prev.items];
+      const suggested = getSuggestedRate(newCurrencyId, prev.branch_id, prev.transaction_type);
+      nextItems[index] = {
+        ...nextItems[index],
+        currency_id: newCurrencyId,
+        rate: suggested,
+        rateInput: suggested > 0 ? fmtNum(suggested, 0) + ",00" : "",
+      };
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const handleItemForeignChange = (index: number, val: string) => {
+    const clean = val.replace(/[^\d,\.]/g, "");
+    const normalized = clean.replace(/\./g, "").replace(",", ".");
+    const num = parseFloat(normalized) || 0;
+    setForm((prev) => {
+      const nextItems = [...prev.items];
+      nextItems[index] = {
+        ...nextItems[index],
+        foreignInput: clean,
+        foreign_amount: num,
+      };
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const handleItemForeignBlur = (index: number) => {
+    setForm((prev) => {
+      const nextItems = [...prev.items];
+      const it = nextItems[index];
+      if (it && it.foreign_amount > 0) {
+        nextItems[index] = {
+          ...it,
+          foreignInput: new Intl.NumberFormat("id-ID", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 5,
+          }).format(it.foreign_amount),
+        };
+      }
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const handleItemRateChange = (index: number, val: string) => {
+    const clean = val.replace(/[^\d,\.]/g, "");
+    const normalized = clean.replace(/\./g, "").replace(",", ".");
+    const num = parseFloat(normalized) || 0;
+    setForm((prev) => {
+      const nextItems = [...prev.items];
+      nextItems[index] = {
+        ...nextItems[index],
+        rateInput: clean,
+        rate: num,
+      };
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const handleItemRateBlur = (index: number) => {
+    setForm((prev) => {
+      const nextItems = [...prev.items];
+      const it = nextItems[index];
+      if (it && it.rate > 0) {
+        nextItems[index] = {
+          ...it,
+          rateInput: fmtNum(it.rate, 0) + ",00",
+        };
+      }
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const handleAddItem = () => {
+    setForm((prev) => ({
+      ...prev,
+      items: [...prev.items, createEmptyItem()],
+    }));
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (form.items.length <= 1) return;
+    setForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleBranchChange = (newBranchId: string) => {
+    setForm((prev) => {
+      const nextItems = prev.items.map((it) => {
+        const suggested = getSuggestedRate(it.currency_id, newBranchId, prev.transaction_type);
+        if (suggested > 0 && (it.rate === 0 || it.rate === suggested)) {
+          return {
+            ...it,
+            rate: suggested,
+            rateInput: fmtNum(suggested, 0) + ",00",
+          };
+        }
+        return it;
+      });
+      return { ...prev, branch_id: newBranchId, items: nextItems };
+    });
+  };
+
+  const idrAmount = useMemo(() => {
+    return form.items.reduce((acc, it) => {
+      const sub = Number((it.rate * it.foreign_amount).toFixed(2));
+      return acc + (isNaN(sub) ? 0 : sub);
+    }, 0);
+  }, [form.items]);
 
   const requiresCDD = idrAmount >= CDD_THRESHOLD_IDR;
   const selectedCustomer = customers.find((c) => c.id === form.customer_id);
@@ -390,14 +510,13 @@ function TransactionsPage() {
       });
       return;
     }
-    const newForm = {
+    const branchId = activeShift?.branch_id ?? HQ;
+    setForm({
       ...emptyForm(),
       transaction_type: type,
-      branch_id: activeShift?.branch_id ?? HQ,
-    };
-    setForm(newForm);
-    setForeignInput("");
-    setRateInput("");
+      branch_id: branchId,
+      items: [createEmptyItem()],
+    });
     setOpen(true);
   }
 
@@ -407,6 +526,28 @@ function TransactionsPage() {
         description: "Buka shif kerja dahulu sebelum menyimpan transaksi.",
       });
       return;
+    }
+
+    // Validate items
+    if (form.items.length === 0) {
+      toast.error("Minimal harus ada 1 mata uang");
+      return;
+    }
+
+    for (let i = 0; i < form.items.length; i++) {
+      const it = form.items[i];
+      if (!it.currency_id) {
+        toast.error(`Baris ke-${i + 1}: Pilih mata uang terlebih dahulu`);
+        return;
+      }
+      if (!it.foreign_amount || it.foreign_amount <= 0) {
+        toast.error(`Baris ke-${i + 1}: Nominal valas harus lebih besar dari 0`);
+        return;
+      }
+      if (!it.rate || it.rate <= 0) {
+        toast.error(`Baris ke-${i + 1}: Kurs harus lebih besar dari 0`);
+        return;
+      }
     }
 
     // 1. Check Monthly Threshold for Customers
@@ -424,7 +565,7 @@ function TransactionsPage() {
         console.error("Threshold check error:", thresholdError);
       } else if (withinThreshold === false) {
         toast.error("Melebihi ambang batas bulanan", {
-          description: `Total transaksi nasabah bulan ini akan melebihi batas $${settings.transaction_threshold_usd.toLocaleString()}.`,
+          description: `Total transaksi nasabah bulan ini akan melebihi batas $${(settings.transaction_threshold_usd || 10000).toLocaleString()}.`,
         });
         return;
       }
@@ -433,46 +574,28 @@ function TransactionsPage() {
     // 2. Check inventory if selling and prevent_oversell is active
     if (form.transaction_type === "sell" && settings.prevent_oversell) {
       const branchId = form.branch_id === HQ ? null : form.branch_id;
-      
-      // Query inventory for this currency at the specific branch
-      const { data: inv, error: invError } = await supabase
-        .from("cash_balances")
-        .select("balance")
-        .eq("currency_id", form.currency_id)
-        .eq(branchId ? "branch_id" : "branch_id_is_null", branchId ? branchId : true)
-        .maybeSingle();
+      for (const it of form.items) {
+        const { data: specificInv, error: specificError } = await (branchId 
+          ? supabase.from("cash_balances").select("balance").eq("currency_id", it.currency_id).eq("branch_id", branchId)
+          : supabase.from("cash_balances").select("balance").eq("currency_id", it.currency_id).is("branch_id", null)
+        ).maybeSingle();
 
-      // Note: If using null in .eq(), Supabase JS might need .is("branch_id", null) 
-      // but the schema usually handles branch_id = null for HQ.
-      // Let's use a more robust check for branch_id.
-      
-      const { data: specificInv, error: specificError } = await (branchId 
-        ? supabase.from("cash_balances").select("balance").eq("currency_id", form.currency_id).eq("branch_id", branchId)
-        : supabase.from("cash_balances").select("balance").eq("currency_id", form.currency_id).is("branch_id", null)
-      ).maybeSingle();
+        if (specificError) {
+          toast.error("Gagal memeriksa saldo", { description: specificError.message });
+          return;
+        }
 
-      if (specificError) {
-        toast.error("Gagal memeriksa saldo", { description: specificError.message });
-        return;
-      }
-
-      const currentBalance = specificInv?.balance || 0;
-
-      if (currentBalance < form.foreign_amount) {
-        toast.error("Saldo cabang tidak mencukupi", {
-          description: `Stok cabang ini: ${fmtNum(currentBalance, 2)}. Transaksi jual ditolak.`,
-        });
-        return;
+        const currentBalance = specificInv?.balance || 0;
+        if (currentBalance < it.foreign_amount) {
+          const currCode = currencies.find((c) => c.id === it.currency_id)?.code || "Valas";
+          toast.error(`Saldo ${currCode} cabang tidak mencukupi`, {
+            description: `Stok cabang ini: ${fmtNum(currentBalance, 2)}. Transaksi jual ditolak.`,
+          });
+          return;
+        }
       }
     }
 
-    const parsed = schema.safeParse(form);
-    if (!parsed.success) {
-      toast.error("Data tidak valid", {
-        description: parsed.error.issues[0]?.message,
-      });
-      return;
-    }
     if (blacklistBlock) {
       toast.error("Nasabah masuk daftar hitam", {
         description: "Transaksi tidak dapat diproses.",
@@ -480,7 +603,7 @@ function TransactionsPage() {
       return;
     }
     if (requiresCDD) {
-      if (parsed.data.customer_id === NO_CUSTOMER) {
+      if (form.customer_id === NO_CUSTOMER) {
         toast.error("CDD wajib", {
           description: "Transaksi ≥ Rp 100 juta wajib mencantumkan nasabah terdaftar.",
         });
@@ -494,43 +617,54 @@ function TransactionsPage() {
         return;
       }
     }
+
     setSaving(true);
-    const payload = {
-      transaction_type: parsed.data.transaction_type,
-      currency_id: parsed.data.currency_id,
-      branch_id: parsed.data.branch_id === HQ ? null : parsed.data.branch_id,
-      customer_id:
-        parsed.data.customer_id === NO_CUSTOMER
-          ? null
-          : parsed.data.customer_id,
-      rate: parsed.data.rate,
-      foreign_amount: parsed.data.foreign_amount,
-      idr_amount: idrAmount,
-      payment_method: parsed.data.payment_method,
-      status: "completed" as const,
-      notes: up(parsed.data.notes),
-      teller_id: user?.id ?? null,
-      ...(isSuperAdmin && parsed.data.transaction_date
-        ? { transaction_date: new Date(parsed.data.transaction_date).toISOString() }
-        : {}),
-    };
-    const { data, error } = await supabase
-      .from("transactions")
-      .insert(payload)
-      .select(
-        "*, currencies(code, name), branches(code, name, address, city, phone), customers(customer_code, full_name, nationality, occupation, date_of_birth, place_of_birth), profiles!teller_id(full_name)",
-      )
-      .single();
-    setSaving(false);
-    if (error) {
-      toast.error("Gagal menyimpan", { description: error.message });
+    const payloadItems = form.items.map((it) => ({
+      currency_id: it.currency_id,
+      foreign_amount: it.foreign_amount,
+      rate: it.rate,
+      idr_amount: Number((it.foreign_amount * it.rate).toFixed(2)),
+    }));
+
+    const { data: rpcRes, error: rpcError } = await supabase.rpc(
+      "create_multi_currency_transaction",
+      {
+        p_branch_id: form.branch_id === HQ ? null : form.branch_id,
+        p_customer_id:
+          form.customer_id === NO_CUSTOMER ? null : form.customer_id,
+        p_transaction_type: form.transaction_type,
+        p_payment_method: form.payment_method,
+        p_notes: up(form.notes) || null,
+        p_transaction_date:
+          isSuperAdmin && form.transaction_date
+            ? new Date(form.transaction_date).toISOString()
+            : null,
+        p_items: payloadItems,
+      }
+    );
+
+    if (rpcError) {
+      setSaving(false);
+      toast.error("Gagal menyimpan transaksi", { description: rpcError.message });
       return;
     }
+
+    const createdId = (rpcRes as any)?.id;
+    const { data: fullTx } = await supabase
+      .from("transactions")
+      .select(
+        "*, currencies(code, name), branches(code, name, address, city, phone), customers(customer_code, full_name, nationality, occupation, date_of_birth, place_of_birth), profiles!teller_id(full_name), transaction_items(*, currencies(code, name))",
+      )
+      .eq("id", createdId)
+      .single();
+
+    setSaving(false);
+    const savedTx = (fullTx as Transaction) || (rpcRes as Transaction);
     toast.success("Transaksi tersimpan", {
-      description: (data as Transaction).transaction_no,
+      description: savedTx.transaction_no,
     });
     setOpen(false);
-    setViewing(data as Transaction);
+    setViewing(savedTx);
     setMustPrint(true);
     setPrinted(false);
     load();
@@ -590,6 +724,7 @@ function TransactionsPage() {
       return (
         r.transaction_no.toLowerCase().includes(q) ||
         r.currencies?.code.toLowerCase().includes(q) ||
+        (r.transaction_items && r.transaction_items.some((it) => it.currencies?.code.toLowerCase().includes(q))) ||
         r.customers?.full_name.toLowerCase().includes(q) ||
         r.customers?.customer_code.toLowerCase().includes(q)
       );
@@ -610,6 +745,26 @@ function TransactionsPage() {
       .reduce((a, r) => a + Number(r.idr_amount), 0);
     return { count: t.length, buy, sell, net: sell - buy };
   }, [rows]);
+
+  const viewingItems = useMemo(() => {
+    if (!viewing) return [];
+    if (viewing.transaction_items && viewing.transaction_items.length > 0) {
+      return viewing.transaction_items.map((it) => ({
+        currency: it.currencies?.code || viewing.currencies?.code || "-",
+        foreign_amount: Number(it.foreign_amount),
+        rate: Number(it.rate),
+        idr_amount: Number(it.idr_amount),
+      }));
+    }
+    return [
+      {
+        currency: viewing.currencies?.code ?? "-",
+        foreign_amount: Number(viewing.foreign_amount),
+        rate: Number(viewing.rate),
+        idr_amount: Number(viewing.idr_amount),
+      },
+    ];
+  }, [viewing]);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -796,14 +951,46 @@ function TransactionsPage() {
                         {r.transaction_type === "buy" ? "Beli" : "Jual"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-mono font-semibold">
-                      {r.currencies?.code}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {fmtNum(Number(r.foreign_amount))}
+                    <TableCell className="text-xs">
+                      {r.transaction_items && r.transaction_items.length > 1 ? (
+                        <div className="flex flex-col gap-1">
+                          {r.transaction_items.map((it, idx) => (
+                            <span key={it.id || idx} className="font-mono font-semibold">
+                              {it.currencies?.code || "-"}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="font-mono font-semibold">
+                          {r.transaction_items?.[0]?.currencies?.code || r.currencies?.code || "-"}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs">
-                      {fmtNum(Number(r.rate), 2)}
+                      {r.transaction_items && r.transaction_items.length > 1 ? (
+                        <div className="flex flex-col gap-1">
+                          {r.transaction_items.map((it, idx) => (
+                            <span key={it.id || idx}>
+                              {fmtNum(Number(it.foreign_amount))}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        fmtNum(Number(r.foreign_amount))
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs">
+                      {r.transaction_items && r.transaction_items.length > 1 ? (
+                        <div className="flex flex-col gap-1">
+                          {r.transaction_items.map((it, idx) => (
+                            <span key={it.id || idx}>
+                              {fmtNum(Number(it.rate), 2)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        fmtNum(Number(r.rate), 2)
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold">
                       {fmtIDR(Number(r.idr_amount))}
@@ -893,7 +1080,7 @@ function TransactionsPage() {
 
       {/* Create dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className={`max-w-2xl max-h-[90vh] overflow-y-auto ${UPPERCASE_FORM}`}>
+        <DialogContent className={`max-w-3xl max-h-[90vh] overflow-y-auto ${UPPERCASE_FORM}`}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {form.transaction_type === "buy" ? (
@@ -915,126 +1102,61 @@ function TransactionsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Mata Uang *</Label>
-              <Select
-                value={form.currency_id}
-                onValueChange={(v) => setForm({ ...form, currency_id: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih mata uang" />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencies.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.code} — {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Cabang</Label>
-              {roles.includes("teller") && !roles.includes("super_admin") ? (
-                <div className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground opacity-70">
-                  {branches.find((b) => b.id === form.branch_id)?.code || "HQ"} — {branches.find((b) => b.id === form.branch_id)?.name || "Default"}
-                </div>
-              ) : (
+          <div className="flex flex-col gap-4">
+            {/* Top row: Cabang & Metode Pembayaran */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Cabang</Label>
+                {roles.includes("teller") && !roles.includes("super_admin") ? (
+                  <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground opacity-70">
+                    {branches.find((b) => b.id === form.branch_id)?.code || "HQ"} — {branches.find((b) => b.id === form.branch_id)?.name || "Default"}
+                  </div>
+                ) : (
+                  <Select
+                    value={form.branch_id}
+                    onValueChange={handleBranchChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={HQ}>HQ / Default</SelectItem>
+                      {branches.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.code} — {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Metode Pembayaran</Label>
                 <Select
-                  value={form.branch_id}
-                  onValueChange={(v) => setForm({ ...form, branch_id: v })}
+                  value={form.payment_method}
+                  onValueChange={(v) =>
+                    setForm({ ...form, payment_method: v as PayMethod })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={HQ}>HQ / Default</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.code} — {b.name}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="cash">Tunai</SelectItem>
+                    <SelectItem value="transfer">Transfer</SelectItem>
+                    <SelectItem value="other">Lainnya</SelectItem>
                   </SelectContent>
                 </Select>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Nominal Valas ({currencies.find(c => c.id === form.currency_id)?.code || "-"}) *</Label>
-              <Input
-                type="text"
-                prefix={currencies.find(c => c.id === form.currency_id)?.code}
-                value={foreignInput}
-                onChange={(e) => {
-                  let val = e.target.value;
-                  // Allow only digits, one comma, and dots as separators
-                  // But for the state we need it formatted visually
-                  const clean = val.replace(/[^\d,\.]/g, "");
-                  setForeignInput(clean);
-                  
-                  // Parse for DB/Logic: remove dots, replace comma with dot
-                  const normalized = clean.replace(/\./g, "").replace(",", ".");
-                  const num = parseFloat(normalized) || 0;
-                  setForm({ ...form, foreign_amount: num });
-                }}
-                onBlur={() => {
-                  // On blur, format it properly
-                  if (form.foreign_amount > 0) {
-                    setForeignInput(new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 5 }).format(form.foreign_amount));
-                  }
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Kurs *</Label>
-              <Input
-                type="text"
-                prefix="Rp"
-                value={rateInput}
-                onChange={(e) => {
-                  let val = e.target.value;
-                  // Allow digits, dots, and one comma
-                  const clean = val.replace(/[^\d,\.]/g, "");
-                  setRateInput(clean);
-                  
-                  // Parse for logic: remove dots, replace comma with dot
-                  const normalized = clean.replace(/\./g, "").replace(",", ".");
-                  const num = parseFloat(normalized) || 0;
-                  setForm({ ...form, rate: num });
-                }}
-                onBlur={() => {
-                  // Format as Rupiah on blur: dots separator and ,00
-                  if (form.rate > 0) {
-                    setRateInput(fmtNum(form.rate, 0) + ",00");
-                  }
-                }}
-              />
-              <p className="text-[10px] text-muted-foreground">
-                Kurs disarankan otomatis dari master kurs aktif — dapat diubah.
-              </p>
-            </div>
-
-            <div className="col-span-2 rounded-xl bg-muted/40 p-4 flex items-center justify-between">
-              <div>
-                <div className="text-xs text-muted-foreground">
-                  Total {form.transaction_type === "buy" ? "Dibayar" : "Diterima"} (IDR)
-                </div>
-                <div className="text-2xl font-bold font-mono">
-                  {fmtIDR(idrAmount)}
-                </div>
               </div>
-              {requiresCDD && (
-                <Badge variant="destructive" className="text-xs">
-                  Wajib CDD — ≥ Rp 100 jt
-                </Badge>
-              )}
             </div>
 
-            <div className="space-y-2 col-span-2">
+            {/* Nasabah Selector */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Nasabah {requiresCDD && "*"}</Label>
                 <Button 
+                  type="button" 
                   variant="ghost" 
                   size="sm" 
                   className="h-7 gap-1 text-xs" 
@@ -1149,24 +1271,135 @@ function TransactionsPage() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label>Metode Pembayaran</Label>
-              <Select
-                value={form.payment_method}
-                onValueChange={(v) =>
-                  setForm({ ...form, payment_method: v as PayMethod })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Tunai</SelectItem>
-                  <SelectItem value="transfer">Transfer</SelectItem>
-                  <SelectItem value="other">Lainnya</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Multiple Currency Items Section */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div>
+                  <h4 className="text-sm font-semibold">Rincian Mata Uang ({form.items.length})</h4>
+                  <p className="text-xs text-muted-foreground">
+                    1 customer dapat menukarkan lebih dari 1 mata uang dalam 1 transaksi.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddItem}
+                  className="gap-1.5 text-xs border-primary/40 text-primary hover:bg-primary/10"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Tambah Mata Uang
+                </Button>
+              </div>
+
+              <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                {form.items.map((item, index) => {
+                  const subtotal = Number((item.rate * item.foreign_amount).toFixed(2));
+                  const selectedCurr = currencies.find((c) => c.id === item.currency_id);
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-lg border bg-card p-3 shadow-xs space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-muted">
+                          Baris #{index + 1}
+                        </span>
+                        {form.items.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                            onClick={() => handleRemoveItem(index)}
+                            title="Hapus baris ini"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Mata Uang *</Label>
+                          <Select
+                            value={item.currency_id}
+                            onValueChange={(v) => handleItemCurrencyChange(index, v)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Pilih valas" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {currencies.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.code} — {c.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs">
+                            Nominal Valas ({selectedCurr?.code || "-"}) *
+                          </Label>
+                          <Input
+                            type="text"
+                            prefix={selectedCurr?.code}
+                            className="h-9"
+                            value={item.foreignInput}
+                            onChange={(e) => handleItemForeignChange(index, e.target.value)}
+                            onBlur={() => handleItemForeignBlur(index)}
+                            placeholder="0"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs">Kurs (Rp) *</Label>
+                          <Input
+                            type="text"
+                            prefix="Rp"
+                            className="h-9"
+                            value={item.rateInput}
+                            onChange={(e) => handleItemRateChange(index, e.target.value)}
+                            onBlur={() => handleItemRateBlur(index)}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-dashed">
+                        <span className="text-muted-foreground">
+                          Subtotal {selectedCurr?.code || "Valas"}:
+                        </span>
+                        <span className="font-mono font-semibold">
+                          {fmtIDR(isNaN(subtotal) ? 0 : subtotal)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Grand Total Box */}
+            <div className="rounded-xl bg-muted/40 p-4 flex items-center justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground">
+                  Grand Total {form.transaction_type === "buy" ? "Dibayar" : "Diterima"} (IDR)
+                </div>
+                <div className="text-2xl font-bold font-mono">
+                  {fmtIDR(idrAmount)}
+                </div>
+              </div>
+              {requiresCDD && (
+                <Badge variant="destructive" className="text-xs">
+                  Wajib CDD — ≥ Rp 100 jt
+                </Badge>
+              )}
+            </div>
+
+            {/* Catatan */}
             <div className="space-y-2">
               <Label>Catatan</Label>
               <Input
@@ -1178,7 +1411,7 @@ function TransactionsPage() {
             </div>
 
             {isSuperAdmin && (
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2">
                 <Label>Tanggal Transaksi (Super Admin)</Label>
                 <Input
                   type="datetime-local"
@@ -1356,15 +1589,19 @@ function TransactionsPage() {
                 </div>
                 <ThermalDivider />
 
-                <div className="flex justify-between items-baseline my-1">
-                  <span>{(viewing.currencies?.code ?? "-").toUpperCase()} {fmtNum(Number(viewing.foreign_amount), 2)}</span>
-                  <span>x {fmtNum(Number(viewing.rate), 2)} =</span>
-                  <span>
-                    {new Intl.NumberFormat("id-ID").format(
-                      Math.round(Number(viewing.idr_amount)),
-                    )}
-                  </span>
-                </div>
+                {viewingItems.map((it, idx) => (
+                  <div key={idx} className="flex justify-between items-baseline my-1">
+                    <span>
+                      {(it.currency ?? "-").toUpperCase()} {fmtNum(Number(it.foreign_amount), 2)}
+                    </span>
+                    <span>x {fmtNum(Number(it.rate), 2)} =</span>
+                    <span>
+                      {new Intl.NumberFormat("id-ID").format(
+                        Math.round(Number(it.idr_amount)),
+                      )}
+                    </span>
+                  </div>
+                ))}
                 <ThermalDivider />
 
                 {/* Total */}
@@ -1441,6 +1678,7 @@ function TransactionsPage() {
                     transaction_type: viewing.transaction_type,
                     branch: viewing.branches ?? null,
                     customer: viewing.customers ?? null,
+                    items: viewingItems,
                     currency: viewing.currencies?.code ?? "-",
                     foreign_amount: Number(viewing.foreign_amount),
                     rate: Number(viewing.rate),
@@ -1471,6 +1709,7 @@ function TransactionsPage() {
                     transaction_type: viewing.transaction_type,
                     branch: viewing.branches ?? null,
                     customer: viewing.customers ?? null,
+                    items: viewingItems,
                     currency: viewing.currencies?.code ?? "-",
                     foreign_amount: Number(viewing.foreign_amount),
                     rate: Number(viewing.rate),
