@@ -378,20 +378,56 @@ function CashPage() {
     (hasAnyRole(roles, ["teller"]) && isHeadOffice);
 
   const totals = useMemo(() => {
-    if (!balances) return { currencies: 0, idrEquiv: 0, valasSummary: [] as { code: string; name: string; balance: number; decimals: number }[] };
-    const valasSummary = balances
-      .filter((b) => b.currencies?.code !== "IDR" && (b.balance ?? 0) > 0)
-      .map((b) => ({
-        code: b.currencies?.code ?? "?",
-        name: b.currencies?.name ?? "",
-        balance: b.balance,
-        decimals: b.currencies?.decimals ?? 2,
-      }))
-      .sort((a, b) => a.code.localeCompare(b.code));
+    if (!balances)
+      return {
+        currencies: 0,
+        idrEquiv: 0,
+        valasSummary: [] as {
+          code: string;
+          name: string;
+          balance: number;
+          decimals: number;
+        }[],
+      };
+
+    let totalIdr = 0;
+    const valasMap = new Map<
+      string,
+      { code: string; name: string; balance: number; decimals: number }
+    >();
+    const activeCurrencies = new Set<string>();
+
+    balances.forEach((b) => {
+      const code = b.currencies?.code;
+      if (!code) return;
+      const bal = Number(b.balance) || 0;
+      if (bal !== 0) {
+        activeCurrencies.add(code);
+      }
+      if (code === "IDR") {
+        totalIdr += bal;
+      } else if (bal > 0) {
+        const existing = valasMap.get(code);
+        if (existing) {
+          existing.balance += bal;
+        } else {
+          valasMap.set(code, {
+            code,
+            name: b.currencies?.name ?? "",
+            balance: bal,
+            decimals: b.currencies?.decimals ?? 2,
+          });
+        }
+      }
+    });
+
+    const valasSummary = Array.from(valasMap.values()).sort((a, b) =>
+      a.code.localeCompare(b.code),
+    );
+
     return {
-      currencies: balances.filter((b) => (b.balance ?? 0) !== 0).length,
-      idrEquiv:
-        balances.find((b) => b.currencies?.code === "IDR")?.balance ?? 0,
+      currencies: activeCurrencies.size,
+      idrEquiv: totalIdr,
       valasSummary,
     };
   }, [balances]);

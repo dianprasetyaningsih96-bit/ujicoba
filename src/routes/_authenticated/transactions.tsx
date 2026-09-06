@@ -510,7 +510,16 @@ function TransactionsPage() {
       });
       return;
     }
-    const branchId = activeShift?.branch_id ?? HQ;
+    const hqId =
+      branches.find(
+        (b) =>
+          b.is_head_office ||
+          (b as any).is_hq ||
+          b.code.toUpperCase().includes("HQ") ||
+          b.name.toLowerCase().includes("pusat") ||
+          b.name.toLowerCase().includes("jimbaran"),
+      )?.id ?? branches[0]?.id;
+    const branchId = activeShift?.branch_id ?? hqId ?? HQ;
     setForm({
       ...emptyForm(),
       transaction_type: type,
@@ -629,7 +638,10 @@ function TransactionsPage() {
     const { data: rpcRes, error: rpcError } = await supabase.rpc(
       "create_multi_currency_transaction",
       {
-        p_branch_id: form.branch_id === HQ ? null : form.branch_id,
+        p_branch_id:
+          form.branch_id === HQ
+            ? (branches.find((b) => b.is_head_office)?.id ?? null)
+            : form.branch_id,
         p_customer_id:
           form.customer_id === NO_CUSTOMER ? null : form.customer_id,
         p_transaction_type: form.transaction_type,
