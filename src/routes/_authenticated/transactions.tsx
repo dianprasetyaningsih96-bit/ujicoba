@@ -1005,7 +1005,11 @@ function TransactionsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold">
-                      {fmtIDR(Number(r.idr_amount))}
+                      {fmtIDR(
+                        r.transaction_items && r.transaction_items.length > 0
+                          ? r.transaction_items.reduce((acc, it) => acc + Number(it.idr_amount), 0)
+                          : Number(r.idr_amount)
+                      )}
                     </TableCell>
                     <TableCell className="text-xs">
                       {r.customers ? (
@@ -1621,7 +1625,9 @@ function TransactionsPage() {
                   <span>TOTAL RP =</span>
                   <span>
                     {new Intl.NumberFormat("id-ID").format(
-                      Math.round(Number(viewing.idr_amount)),
+                      viewingItems.length > 0
+                        ? viewingItems.reduce((acc, it) => acc + Math.round(Number(it.idr_amount)), 0)
+                        : Math.round(Number(viewing.idr_amount)),
                     )}
                   </span>
                 </div>
@@ -1629,7 +1635,9 @@ function TransactionsPage() {
                   <span>(RP)</span>
                   <span>
                     {new Intl.NumberFormat("id-ID").format(
-                      Math.round(Number(viewing.idr_amount)),
+                      viewingItems.length > 0
+                        ? viewingItems.reduce((acc, it) => acc + Math.round(Number(it.idr_amount)), 0)
+                        : Math.round(Number(viewing.idr_amount)),
                     )}
                   </span>
                 </div>

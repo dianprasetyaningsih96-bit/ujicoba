@@ -87,7 +87,11 @@ export function buildReceiptHtml(r: ReceiptData): string {
             },
           ]
         : [];
-  const idrStr = new Intl.NumberFormat("id-ID").format(Math.round(r.idr_amount));
+  const totalCalculated =
+    items.length > 0
+      ? items.reduce((acc, it) => acc + Math.round(Number(it.idr_amount)), 0)
+      : Math.round(r.idr_amount);
+  const idrStr = new Intl.NumberFormat("id-ID").format(totalCalculated);
   const outlet = (r.branch?.name || r.branch?.code || "-").toUpperCase();
   const payType = (r.payment_method || "Cash").toUpperCase();
   const operator = (r.teller_name || "CUSTOMER").toUpperCase();
@@ -429,7 +433,11 @@ export function generateReceiptPdf(r: ReceiptData) {
             },
           ]
         : [];
-  const idrStr = new Intl.NumberFormat("id-ID").format(Math.round(r.idr_amount));
+  const totalCalculated =
+    items.length > 0
+      ? items.reduce((acc, it) => acc + Math.round(Number(it.idr_amount)), 0)
+      : Math.round(r.idr_amount);
+  const idrStr = new Intl.NumberFormat("id-ID").format(totalCalculated);
 
   for (const it of items) {
     const currStr = (it.currency || "").toUpperCase();
