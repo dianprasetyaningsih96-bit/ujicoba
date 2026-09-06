@@ -50,8 +50,10 @@ INSERT INTO public.transaction_items (
   transaction_id, currency_id, foreign_amount, rate, idr_amount, created_at
 )
 SELECT id, currency_id, foreign_amount, rate, idr_amount, transaction_date
-FROM public.transactions
-ON CONFLICT DO NOTHING;
+FROM public.transactions t
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.transaction_items ti WHERE ti.transaction_id = t.id
+);
 
 -- 3. Trigger to post foreign currency cash movements when transaction_item is inserted
 CREATE OR REPLACE FUNCTION public.post_item_cash_movement()
