@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
@@ -16,6 +23,8 @@ import { Card, CardContent } from "@/components/ui/card";
 export function EditTransactionDialog({ 
   transaction, 
   customers,
+  currencies = [],
+  rates = [],
   open, 
   onOpenChange,
   onSaved,
@@ -23,6 +32,8 @@ export function EditTransactionDialog({
 }: {
   transaction: any;
   customers: any[];
+  currencies?: any[];
+  rates?: any[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
@@ -34,16 +45,36 @@ export function EditTransactionDialog({
   const [idr, setIdr] = useState("");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState("");
+  const [currencyId, setCurrencyId] = useState<string>("");
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [previewTxNo, setPreviewTxNo] = useState<string>("");
+  const [activeCurrencies, setActiveCurrencies] = useState<any[]>(currencies);
+
+  useEffect(() => {
+    if (currencies && currencies.length > 0) {
+      setActiveCurrencies(currencies);
+    } else if (open) {
+      supabase
+        .from("currencies")
+        .select("id, code, name")
+        .eq("is_active", true)
+        .order("code")
+        .then(({ data }) => {
+          if (data) setActiveCurrencies(data);
+        });
+    }
+  }, [currencies, open]);
 
   useEffect(() => {
     if (transaction && open) {
-      setForeign(transaction.foreign_amount.toString());
-      setRate(transaction.rate.toString());
-      setIdr(transaction.idr_amount.toString());
+      setForeign(transaction.foreign_amount?.toString() || "");
+      setRate(transaction.rate?.toString() || "");
+      setIdr(transaction.idr_amount?.toString() || "");
       setNotes(transaction.notes || "");
+      setCurrencyId(transaction.currency_id || "");
       setCustomerId(transaction.customer_id);
+      setPreviewTxNo(transaction.transaction_no || "");
       setShowAddCustomer(false);
       
       const tzoffset = (new Date()).getTimezoneOffset() * 60000;
@@ -51,6 +82,46 @@ export function EditTransactionDialog({
       setDate(localISOTime.slice(0, 16));
     }
   }, [transaction, open]);
+
+  // Real-time automatic adjustment of transaction number when date changes
+  useEffect(() => {
+    if (!transaction || !open || !date) return;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return;
+
+    // Instant local optimistic preview
+    const yyyy = d.getFullYear().toString();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const dateStr = `${yyyy}${mm}${dd}`;
+
+    const parts = (transaction.transaction_no || "").split("-");
+    if (parts.length >= 3) {
+      const prefixBase = parts[0];
+      setPreviewTxNo(`${prefixBase}-${dateStr}-${parts[2]}`);
+    }
+
+    // Call authoritative RPC for exact chronological sequence
+    let isMounted = true;
+    const timer = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase.rpc("get_preview_transaction_no", {
+          p_tx_id: transaction.id,
+          p_date: d.toISOString(),
+        });
+        if (!error && data && isMounted) {
+          setPreviewTxNo(data);
+        }
+      } catch (err) {
+        console.error("Error previewing transaction number:", err);
+      }
+    }, 150);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [date, transaction?.id, open]);
 
   // Sync idr when foreign or rate changes
   useEffect(() => {
@@ -60,22 +131,42 @@ export function EditTransactionDialog({
     if (!isNaN(f) && !isNaN(r)) {
       setIdr(Math.round(f * r).toString());
     }
-  }, [foreign, rate]);
+  }, [foreign, rate, open]);
+
+  const handleCurrencyChange = (newCurrId: string) => {
+    setCurrencyId(newCurrId);
+    if (rates && rates.length > 0) {
+      const branchId = transaction.branch_id;
+      const match =
+        rates.find((r: any) => r.currency_id === newCurrId && r.branch_id === branchId) ||
+        rates.find((r: any) => r.currency_id === newCurrId && r.branch_id === null);
+      if (match) {
+        const suggested =
+          transaction.transaction_type === "buy"
+            ? Number(match.buy_rate)
+            : Number(match.sell_rate);
+        if (suggested > 0) {
+          setRate(suggested.toString());
+        }
+      }
+    }
+  };
 
   const handleSave = async () => {
     try {
       setBusy(true);
-      const { error } = await supabase.rpc("admin_edit_transaction", {
+      const { data: newTxNo, error } = await supabase.rpc("admin_edit_transaction", {
         p_tx_id: transaction.id,
         p_foreign_amount: parseFloat(foreign),
         p_idr_amount: parseFloat(idr),
         p_rate: parseFloat(rate),
         p_customer_id: customerId,
         p_notes: notes,
-        p_date: new Date(date).toISOString()
+        p_date: new Date(date).toISOString(),
+        p_currency_id: currencyId || transaction.currency_id,
       });
       if (error) throw error;
-      toast.success("Transaksi berhasil diubah.");
+      toast.success(`Transaksi ${newTxNo || previewTxNo} berhasil diperbarui.`);
       onSaved();
       onOpenChange(false);
     } catch (err: any) {
@@ -87,11 +178,14 @@ export function EditTransactionDialog({
 
   if (!transaction) return null;
 
+  const currentCurrency = activeCurrencies.find((c) => c.id === currencyId) || transaction.currencies;
+  const currencyCode = currentCurrency?.code || "";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Transaksi {transaction.transaction_no}</DialogTitle>
+          <DialogTitle>Edit Transaksi {previewTxNo || transaction.transaction_no}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
@@ -188,9 +282,24 @@ export function EditTransactionDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="grid gap-2">
-              <Label>Nominal Valas ({transaction.currencies?.code})</Label>
+              <Label>Mata Uang</Label>
+              <Select value={currencyId} onValueChange={handleCurrencyChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Pilih mata uang" />
+                </SelectTrigger>
+                <SelectContent className="max-h-56 overflow-y-auto">
+                  {activeCurrencies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.code} - {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Nominal Valas {currencyCode ? `(${currencyCode})` : ""}</Label>
               <Input type="number" value={foreign} onChange={(e) => setForeign(e.target.value)} />
             </div>
             <div className="grid gap-2">

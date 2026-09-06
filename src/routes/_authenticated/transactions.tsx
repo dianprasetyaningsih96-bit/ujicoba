@@ -1568,6 +1568,8 @@ function TransactionsPage() {
         }}
         transaction={editing}
         customers={customers}
+        currencies={currencies}
+        rates={rates}
         onReloadCustomers={load}
         onSaved={() => {
           load();
