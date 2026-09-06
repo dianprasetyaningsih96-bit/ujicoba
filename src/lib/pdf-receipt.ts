@@ -94,7 +94,8 @@ export function buildReceiptHtml(r: ReceiptData): string {
   const idrStr = new Intl.NumberFormat("id-ID").format(totalCalculated);
   const outlet = (r.branch?.name || r.branch?.code || "-").toUpperCase();
   const payType = (r.payment_method || "Cash").toUpperCase();
-  const operator = (r.teller_name || "CUSTOMER").toUpperCase();
+  const operator = (r.teller_name || "TELLER").toUpperCase();
+  const tellerName = (r.teller_name || "TELLER").toUpperCase();
 
   return `<!DOCTYPE html>
 <html>
@@ -296,8 +297,8 @@ export function buildReceiptHtml(r: ReceiptData): string {
     ${r.teller_name ? `<div class="detail-row"><span class="detail-label">Operator</span><span class="detail-sep">:</span><span class="detail-val">${r.teller_name.toUpperCase()}</span></div>` : ""}
 
     <div class="signatures">
-      <span>( ${operator} )</span>
-      <span>( CASHIER )</span>
+      <span>( ${tellerName} )</span>
+      <span>( ${customerName} )</span>
     </div>
 
     <div class="attention">
@@ -467,7 +468,9 @@ export function generateReceiptPdf(r: ReceiptData) {
 
   if (r.teller_name) detail("Operator", r.teller_name.toUpperCase());
   y += 8;
-  centered(`( ${r.teller_name?.toUpperCase() || "CUSTOMER"} )   ( CASHIER )`, 7.5);
+  const pdfTeller = (r.teller_name || "TELLER").toUpperCase();
+  const pdfCustomer = (r.customer?.full_name || "CUSTOMER").toUpperCase();
+  centered(`( ${pdfTeller} )   ( ${pdfCustomer} )`, 7.5);
   y += 6;
   centered("ATTENTION #", 7.5, true);
   centered("Claim for shortage of cash after leaving", 7.5);
