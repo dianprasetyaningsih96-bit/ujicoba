@@ -127,6 +127,8 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.create_multi_currency_transaction(uuid, uuid, public.transaction_type, public.payment_method, text, timestamptz, jsonb);
+
 CREATE OR REPLACE FUNCTION public.create_multi_currency_transaction(
   p_branch_id uuid,
   p_customer_id uuid,
