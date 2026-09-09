@@ -18,6 +18,8 @@ import {
   FileDown,
   AlertTriangle,
   ShieldAlert,
+  Calendar,
+  X,
 } from "lucide-react";
 import { Plus, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -230,6 +232,37 @@ const fmtNum = (n: number, d = 2) =>
 // PPATK CDD threshold — Rp 100 juta untuk transaksi tunai
 const CDD_THRESHOLD_IDR = 100_000_000;
 
+type DateFilterMode = "all" | "today" | "yesterday" | "this_month" | "custom_date" | "custom_range";
+
+function toLocalDateStr(d: Date | string): string {
+  const dateObj = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return "";
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDayRangeISO(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+  return {
+    startISO: start.toISOString(),
+    endISO: end.toISOString(),
+  };
+}
+
+function getMonthRangeISO(ymStr: string) {
+  const [y, m] = ymStr.split("-").map(Number);
+  const start = new Date(y, m - 1, 1, 0, 0, 0, 0);
+  const end = new Date(y, m, 0, 23, 59, 59, 999);
+  return {
+    startISO: start.toISOString(),
+    endISO: end.toISOString(),
+  };
+}
+
 function TransactionsPage() {
   const { roles, user, profile } = useCurrentUser();
   const { settings } = useAppSettings();
@@ -282,6 +315,10 @@ function TransactionsPage() {
   const [filterType, setFilterType] = useState<"all" | TxType>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | TxStatus>("all");
   const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [dateMode, setDateMode] = useState<DateFilterMode>("all");
+  const [customDate, setCustomDate] = useState<string>("");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -298,14 +335,19 @@ function TransactionsPage() {
   const [voidReason, setVoidReason] = useState("");
   const [showAddCustomer, setShowAddCustomer] = useState(false);
 
-  async function load(targetBranch = filterBranch) {
+  async function load(
+    targetBranch = filterBranch,
+    targetDateMode = dateMode,
+    targetCustomDate = customDate,
+    targetStart = startDate,
+    targetEnd = endDate,
+  ) {
     let query = supabase
       .from("transactions")
       .select(
         "*, currencies(code, name), branches(code, name, address, city, phone), customers(customer_code, full_name, nationality, occupation, date_of_birth, place_of_birth), profiles!teller_id(full_name), transaction_items(*, currencies(code, name))",
       )
-      .order("transaction_date", { ascending: false })
-      .limit(300);
+      .order("transaction_date", { ascending: false });
 
     // Filter by branch if not super admin, or if super admin selects a specific branch
     if (!isSuperAdmin && profile?.branch_id) {
@@ -313,6 +355,35 @@ function TransactionsPage() {
     } else if (isSuperAdmin && targetBranch !== "all") {
       query = query.eq("branch_id", targetBranch);
     }
+
+    // Filter by date
+    if (targetDateMode === "today") {
+      const { startISO, endISO } = getDayRangeISO(toLocalDateStr(new Date()));
+      query = query.gte("transaction_date", startISO).lte("transaction_date", endISO);
+    } else if (targetDateMode === "yesterday") {
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      const { startISO, endISO } = getDayRangeISO(toLocalDateStr(y));
+      query = query.gte("transaction_date", startISO).lte("transaction_date", endISO);
+    } else if (targetDateMode === "this_month") {
+      const ym = toLocalDateStr(new Date()).slice(0, 7);
+      const { startISO, endISO } = getMonthRangeISO(ym);
+      query = query.gte("transaction_date", startISO).lte("transaction_date", endISO);
+    } else if (targetDateMode === "custom_date" && targetCustomDate) {
+      const { startISO, endISO } = getDayRangeISO(targetCustomDate);
+      query = query.gte("transaction_date", startISO).lte("transaction_date", endISO);
+    } else if (targetDateMode === "custom_range") {
+      if (targetStart) {
+        const { startISO } = getDayRangeISO(targetStart);
+        query = query.gte("transaction_date", startISO);
+      }
+      if (targetEnd) {
+        const { endISO } = getDayRangeISO(targetEnd);
+        query = query.lte("transaction_date", endISO);
+      }
+    }
+
+    query = query.limit(300);
 
     const [
       { data: trx, error },
@@ -731,12 +802,33 @@ function TransactionsPage() {
   const filtered = useMemo(() => {
     if (!rows) return null;
     const q = search.trim().toLowerCase();
+    const todayStr = toLocalDateStr(new Date());
+    let yStr = "";
+    if (dateMode === "yesterday") {
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      yStr = toLocalDateStr(y);
+    }
+    const thisMonthStr = todayStr.slice(0, 7);
+
     return rows.filter((r) => {
       if (isSuperAdmin && filterBranch !== "all" && r.branch_id !== filterBranch)
         return false;
       if (filterType !== "all" && r.transaction_type !== filterType)
         return false;
       if (filterStatus !== "all" && r.status !== filterStatus) return false;
+
+      // Date filtering
+      const rowDateStr = toLocalDateStr(r.transaction_date);
+      if (dateMode === "today" && rowDateStr !== todayStr) return false;
+      if (dateMode === "yesterday" && rowDateStr !== yStr) return false;
+      if (dateMode === "this_month" && !rowDateStr.startsWith(thisMonthStr)) return false;
+      if (dateMode === "custom_date" && customDate && rowDateStr !== customDate) return false;
+      if (dateMode === "custom_range") {
+        if (startDate && rowDateStr < startDate) return false;
+        if (endDate && rowDateStr > endDate) return false;
+      }
+
       if (!q) return true;
       return (
         r.transaction_no.toLowerCase().includes(q) ||
@@ -748,14 +840,14 @@ function TransactionsPage() {
         (r.branches?.code && r.branches.code.toLowerCase().includes(q))
       );
     });
-  }, [rows, search, filterType, filterStatus, isSuperAdmin, filterBranch]);
+  }, [rows, search, filterType, filterStatus, isSuperAdmin, filterBranch, dateMode, customDate, startDate, endDate]);
 
   const stats = useMemo(() => {
     if (!rows) return null;
-    const today = new Date().toISOString().slice(0, 10);
+    const todayStr = toLocalDateStr(new Date());
     const t = rows.filter(
       (r) =>
-        r.transaction_date.slice(0, 10) === today &&
+        toLocalDateStr(r.transaction_date) === todayStr &&
         r.status !== "voided" &&
         (!isSuperAdmin || filterBranch === "all" || r.branch_id === filterBranch),
     );
@@ -871,8 +963,8 @@ function TransactionsPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Cari no transaksi, mata uang, nasabah…"
@@ -881,12 +973,13 @@ function TransactionsPage() {
             className="pl-9"
           />
         </div>
+
         {isSuperAdmin && (
           <Select
             value={filterBranch}
             onValueChange={(v) => {
               setFilterBranch(v);
-              load(v);
+              load(v, dateMode, customDate, startDate, endDate);
             }}
           >
             <SelectTrigger className="w-full sm:w-48">
@@ -902,11 +995,96 @@ function TransactionsPage() {
             </SelectContent>
           </Select>
         )}
+
+        <Select
+          value={dateMode}
+          onValueChange={(v: DateFilterMode) => {
+            setDateMode(v);
+            if (v === "all" || v === "today" || v === "yesterday" || v === "this_month") {
+              load(filterBranch, v, customDate, startDate, endDate);
+            }
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-44">
+            <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Tanggal</SelectItem>
+            <SelectItem value="today">Hari Ini</SelectItem>
+            <SelectItem value="yesterday">Kemarin</SelectItem>
+            <SelectItem value="this_month">Bulan Ini</SelectItem>
+            <SelectItem value="custom_date">Pilih Tanggal</SelectItem>
+            <SelectItem value="custom_range">Rentang Tanggal</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {dateMode === "custom_date" && (
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date"
+              value={customDate}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCustomDate(val);
+                load(filterBranch, "custom_date", val, startDate, endDate);
+              }}
+              className="w-full sm:w-40"
+            />
+          </div>
+        )}
+
+        {dateMode === "custom_range" && (
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date"
+              value={startDate}
+              placeholder="Dari"
+              onChange={(e) => {
+                const val = e.target.value;
+                setStartDate(val);
+                load(filterBranch, "custom_range", customDate, val, endDate);
+              }}
+              className="w-full sm:w-36"
+            />
+            <span className="text-xs text-muted-foreground">s/d</span>
+            <Input
+              type="date"
+              value={endDate}
+              placeholder="Sampai"
+              onChange={(e) => {
+                const val = e.target.value;
+                setEndDate(val);
+                load(filterBranch, "custom_range", customDate, startDate, val);
+              }}
+              className="w-full sm:w-36"
+            />
+          </div>
+        )}
+
+        {dateMode !== "all" && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0"
+            onClick={() => {
+              setDateMode("all");
+              setCustomDate("");
+              setStartDate("");
+              setEndDate("");
+              load(filterBranch, "all", "", "", "");
+            }}
+            title="Reset filter tanggal"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+
         <Select
           value={filterType}
           onValueChange={(v) => setFilterType(v as "all" | TxType)}
         >
-          <SelectTrigger className="w-full sm:w-40">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -915,11 +1093,12 @@ function TransactionsPage() {
             <SelectItem value="sell">Jual Valas</SelectItem>
           </SelectContent>
         </Select>
+
         <Select
           value={filterStatus}
           onValueChange={(v) => setFilterStatus(v as "all" | TxStatus)}
         >
-          <SelectTrigger className="w-full sm:w-40">
+          <SelectTrigger className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
