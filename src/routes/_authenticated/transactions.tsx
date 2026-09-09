@@ -281,6 +281,7 @@ function TransactionsPage() {
   }, [routerSearch.search]);
   const [filterType, setFilterType] = useState<"all" | TxType>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | TxStatus>("all");
+  const [filterBranch, setFilterBranch] = useState<string>("all");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -297,18 +298,20 @@ function TransactionsPage() {
   const [voidReason, setVoidReason] = useState("");
   const [showAddCustomer, setShowAddCustomer] = useState(false);
 
-  async function load() {
+  async function load(targetBranch = filterBranch) {
     let query = supabase
       .from("transactions")
       .select(
         "*, currencies(code, name), branches(code, name, address, city, phone), customers(customer_code, full_name, nationality, occupation, date_of_birth, place_of_birth), profiles!teller_id(full_name), transaction_items(*, currencies(code, name))",
       )
       .order("transaction_date", { ascending: false })
-      .limit(200);
+      .limit(300);
 
-    // Filter by branch if not super admin
+    // Filter by branch if not super admin, or if super admin selects a specific branch
     if (!isSuperAdmin && profile?.branch_id) {
       query = query.eq("branch_id", profile.branch_id);
+    } else if (isSuperAdmin && targetBranch !== "all") {
+      query = query.eq("branch_id", targetBranch);
     }
 
     const [
@@ -729,6 +732,8 @@ function TransactionsPage() {
     if (!rows) return null;
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
+      if (isSuperAdmin && filterBranch !== "all" && r.branch_id !== filterBranch)
+        return false;
       if (filterType !== "all" && r.transaction_type !== filterType)
         return false;
       if (filterStatus !== "all" && r.status !== filterStatus) return false;
@@ -738,16 +743,21 @@ function TransactionsPage() {
         r.currencies?.code.toLowerCase().includes(q) ||
         (r.transaction_items && r.transaction_items.some((it) => it.currencies?.code.toLowerCase().includes(q))) ||
         r.customers?.full_name.toLowerCase().includes(q) ||
-        r.customers?.customer_code.toLowerCase().includes(q)
+        r.customers?.customer_code.toLowerCase().includes(q) ||
+        (r.branches?.name && r.branches.name.toLowerCase().includes(q)) ||
+        (r.branches?.code && r.branches.code.toLowerCase().includes(q))
       );
     });
-  }, [rows, search, filterType, filterStatus]);
+  }, [rows, search, filterType, filterStatus, isSuperAdmin, filterBranch]);
 
   const stats = useMemo(() => {
     if (!rows) return null;
     const today = new Date().toISOString().slice(0, 10);
     const t = rows.filter(
-      (r) => r.transaction_date.slice(0, 10) === today && r.status !== "voided",
+      (r) =>
+        r.transaction_date.slice(0, 10) === today &&
+        r.status !== "voided" &&
+        (!isSuperAdmin || filterBranch === "all" || r.branch_id === filterBranch),
     );
     const buy = t
       .filter((r) => r.transaction_type === "buy")
@@ -756,7 +766,7 @@ function TransactionsPage() {
       .filter((r) => r.transaction_type === "sell")
       .reduce((a, r) => a + Number(r.idr_amount), 0);
     return { count: t.length, buy, sell, net: sell - buy };
-  }, [rows]);
+  }, [rows, isSuperAdmin, filterBranch]);
 
   const viewingItems = useMemo(() => {
     if (!viewing) return [];
@@ -871,11 +881,32 @@ function TransactionsPage() {
             className="pl-9"
           />
         </div>
+        {isSuperAdmin && (
+          <Select
+            value={filterBranch}
+            onValueChange={(v) => {
+              setFilterBranch(v);
+              load(v);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Semua Cabang" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Cabang</SelectItem>
+              {branches.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select
           value={filterType}
           onValueChange={(v) => setFilterType(v as "all" | TxType)}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full sm:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -888,7 +919,7 @@ function TransactionsPage() {
           value={filterStatus}
           onValueChange={(v) => setFilterStatus(v as "all" | TxStatus)}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full sm:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -938,7 +969,12 @@ function TransactionsPage() {
                 filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-xs">
-                      {r.transaction_no}
+                      <div>{r.transaction_no}</div>
+                      {isSuperAdmin && r.branches?.name && (
+                        <div className="text-[10px] text-muted-foreground font-sans truncate max-w-[140px]">
+                          {r.branches.name}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs">
                       {new Date(r.transaction_date).toLocaleString("id-ID", {
