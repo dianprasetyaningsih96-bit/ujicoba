@@ -434,9 +434,15 @@ function OpenShiftDialog({
     if (!userId) { toast.error("Sesi tidak valid"); return; }
     
     const reqCapVal = Number(requestedCapital.replace(/[^\d]/g, "")) || 0;
-    const baseCapVal = isHq && shiftType === "pagi" ? (prevInfo?.idrAmount ?? 0) : 0;
-    const addCapVal = isHq && shiftType === "pagi" ? Number(additionalCapital.replace(/[^\d]/g, "")) || 0 : 0;
-    const totalHqCap = baseCapVal + addCapVal;
+    const baseCapVal =
+      shiftType === "siang" || (isHq && shiftType === "pagi")
+        ? (prevInfo?.idrAmount ?? 0)
+        : 0;
+    const addCapVal =
+      isHq && shiftType === "pagi"
+        ? Number(additionalCapital.replace(/[^\d]/g, "")) || 0
+        : 0;
+    const totalOpeningCap = baseCapVal + addCapVal;
 
     setSaving(true);
     const { data: shiftData, error } = await supabase
@@ -445,7 +451,7 @@ function OpenShiftDialog({
         branch_id: branchId,
         user_id: userId,
         shift_type: shiftType,
-        opening_capital: totalHqCap,
+        opening_capital: totalOpeningCap,
         notes: notes || null,
       })
       .select("id")
@@ -697,12 +703,16 @@ function OpenShiftDialog({
             )
           ) : (
             <div className="space-y-2">
-              <Label>Permintaan Modal (IDR) ke Kantor Pusat</Label>
+              <Label>
+                {shiftType === "siang"
+                  ? "Permintaan Tambahan Modal (IDR) ke Kantor Pusat (Opsional)"
+                  : "Permintaan Modal (IDR) ke Kantor Pusat"}
+              </Label>
               <Input
                 type="text"
                 inputMode="numeric"
                 prefix="Rp"
-                placeholder="Contoh: 50.000.000"
+                placeholder={shiftType === "siang" ? "0 (Kosongkan jika cukup sisa shif pagi)" : "Contoh: 50.000.000"}
                 value={requestedCapital ? formatIDR(Number(requestedCapital.replace(/[^\d]/g, ""))).replace("Rp", "").trim() : ""}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^\d]/g, "");
@@ -710,7 +720,9 @@ function OpenShiftDialog({
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Permintaan modal ini akan dikirimkan ke Kantor Pusat untuk disetujui/ditolak.
+                {shiftType === "siang"
+                  ? "Opsional. Modal awal shif siang otomatis menggunakan sisa kas dari shif pagi di atas."
+                  : "Permintaan modal ini akan dikirimkan ke Kantor Pusat untuk disetujui/ditolak."}
               </p>
             </div>
           )}

@@ -143,9 +143,18 @@ function ApprovalsPage() {
         approveDialog.currency?.code === "IDR";
 
       if (approveDialog.shift_id && isCapitalReq) {
+        const { data: curShift } = await supabase
+          .from("shifts")
+          .select("opening_capital, shift_type")
+          .eq("id", approveDialog.shift_id)
+          .single();
+
+        const currentOpening = Number(curShift?.opening_capital || 0);
+        const newOpening = curShift?.shift_type === "siang" ? currentOpening + finalAmount : finalAmount;
+
         await supabase
           .from("shifts")
-          .update({ opening_capital: finalAmount })
+          .update({ opening_capital: newOpening })
           .eq("id", approveDialog.shift_id);
       }
 
@@ -179,9 +188,18 @@ function ApprovalsPage() {
         transfer.currency?.code === "IDR";
 
       if (status === "accepted" && transfer.shift_id && isCapitalReq) {
+        const { data: curShift } = await supabase
+          .from("shifts")
+          .select("opening_capital, shift_type")
+          .eq("id", transfer.shift_id)
+          .single();
+
+        const currentOpening = Number(curShift?.opening_capital || 0);
+        const newOpening = curShift?.shift_type === "siang" ? currentOpening + transfer.amount : transfer.amount;
+
         await supabase
           .from("shifts")
-          .update({ opening_capital: transfer.amount })
+          .update({ opening_capital: newOpening })
           .eq("id", transfer.shift_id);
       }
 
