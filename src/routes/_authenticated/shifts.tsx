@@ -147,7 +147,7 @@ function ShiftsPage() {
                 <CardDescription>
                   Dibuka {formatDateTime(myOpenShift.opened_at)}
                   {myOpenShift.opening_capital > 0 && (
-                    <> · Modal awal: <b>{formatIDR(myOpenShift.opening_capital)}</b></>
+                    <> · Modal awal: <b>{formatIDR(myOpenShift.opening_capital)}</b>{myOpenShift.shift_type === "siang" ? " (Serah Terima)" : ""}</>
                   )}
                 </CardDescription>
               </div>
@@ -194,7 +194,20 @@ function ShiftsPage() {
                   <TableCell><Badge variant="outline">{s.shift_type === "pagi" ? "Pagi" : "Siang/Sore"}</Badge></TableCell>
                   <TableCell className="whitespace-nowrap">{formatDateTime(s.opened_at)}</TableCell>
                   <TableCell className="whitespace-nowrap">{formatDateTime(s.closed_at)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{s.opening_capital > 0 ? formatIDR(s.opening_capital) : "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {s.opening_capital > 0 ? (
+                      <div>
+                        <div className="font-medium">{formatIDR(s.opening_capital)}</div>
+                        {s.shift_type === "siang" && (
+                          <span className="text-[10px] text-muted-foreground block -mt-0.5">
+                            (Serah Terima)
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                   <TableCell>
                     {s.status === "open" ? (
                       <Badge className="bg-emerald-600 hover:bg-emerald-600">Terbuka</Badge>
