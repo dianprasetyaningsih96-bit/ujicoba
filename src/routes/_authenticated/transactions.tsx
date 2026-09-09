@@ -843,23 +843,74 @@ function TransactionsPage() {
     });
   }, [rows, search, filterType, filterStatus, isSuperAdmin, filterBranch, dateMode, customDate, startDate, endDate]);
 
+  const statLabels = useMemo(() => {
+    switch (dateMode) {
+      case "today":
+        return {
+          count: "Transaksi Hari Ini",
+          buy: "Beli Valas Hari Ini",
+          sell: "Jual Valas Hari Ini",
+          net: "Net Position Hari Ini",
+        };
+      case "yesterday":
+        return {
+          count: "Transaksi Kemarin",
+          buy: "Beli Valas Kemarin",
+          sell: "Jual Valas Kemarin",
+          net: "Net Position Kemarin",
+        };
+      case "this_month":
+        return {
+          count: "Transaksi Bulan Ini",
+          buy: "Beli Valas Bulan Ini",
+          sell: "Jual Valas Bulan Ini",
+          net: "Net Position Bulan Ini",
+        };
+      case "custom_date":
+        return {
+          count: customDate ? `Transaksi (${customDate.split("-").reverse().join("/")})` : "Total Transaksi",
+          buy: "Beli Valas",
+          sell: "Jual Valas",
+          net: "Net Position",
+        };
+      case "custom_range":
+        return {
+          count: "Transaksi Terfilter",
+          buy: "Beli Valas Periode",
+          sell: "Jual Valas Periode",
+          net: "Net Position",
+        };
+      case "all":
+      default:
+        return {
+          count: "Total Transaksi",
+          buy: "Total Beli Valas",
+          sell: "Total Jual Valas",
+          net: "Net Position",
+        };
+    }
+  }, [dateMode, customDate]);
+
   const stats = useMemo(() => {
-    if (!rows) return null;
-    const todayStr = toLocalDateStr(new Date());
-    const t = rows.filter(
-      (r) =>
-        toLocalDateStr(r.transaction_date) === todayStr &&
-        r.status !== "voided" &&
-        (!isSuperAdmin || filterBranch === "all" || r.branch_id === filterBranch),
-    );
+    if (!filtered) return null;
+    const t = filtered.filter((r) => r.status !== "voided");
+
+    const getTrxTotalIdr = (r: Transaction) => {
+      if (r.transaction_items && r.transaction_items.length > 0) {
+        return r.transaction_items.reduce((acc, it) => acc + Number(it.idr_amount), 0);
+      }
+      return Number(r.idr_amount) || 0;
+    };
+
     const buy = t
       .filter((r) => r.transaction_type === "buy")
-      .reduce((a, r) => a + Number(r.idr_amount), 0);
+      .reduce((a, r) => a + getTrxTotalIdr(r), 0);
     const sell = t
       .filter((r) => r.transaction_type === "sell")
-      .reduce((a, r) => a + Number(r.idr_amount), 0);
+      .reduce((a, r) => a + getTrxTotalIdr(r), 0);
+
     return { count: t.length, buy, sell, net: sell - buy };
-  }, [rows, isSuperAdmin, filterBranch]);
+  }, [filtered]);
 
   const viewingItems = useMemo(() => {
     if (!viewing) return [];
@@ -945,19 +996,19 @@ function TransactionsPage() {
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Transaksi Hari Ini" value={String(stats.count)} />
+          <StatCard label={statLabels.count} value={String(stats.count)} />
           <StatCard
-            label="Beli Valas Hari Ini"
+            label={statLabels.buy}
             value={fmtIDR(stats.buy)}
             tone="emerald"
           />
           <StatCard
-            label="Jual Valas Hari Ini"
+            label={statLabels.sell}
             value={fmtIDR(stats.sell)}
             tone="blue"
           />
           <StatCard
-            label="Net Position"
+            label={statLabels.net}
             value={fmtIDR(stats.net)}
             tone={stats.net >= 0 ? "emerald" : "red"}
           />
