@@ -25,6 +25,7 @@ import { Plus, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CustomerForm } from "@/components/customers/customer-form";
 import { EditTransactionDialog } from "@/components/transactions/edit-transaction-dialog";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { COUNTRIES } from "@/lib/countries";
@@ -1021,39 +1022,34 @@ function TransactionsPage() {
 
         {dateMode === "custom_date" && (
           <div className="flex items-center gap-1.5">
-            <Input
-              type="date"
+            <DatePickerInput
               value={customDate}
-              onChange={(e) => {
-                const val = e.target.value;
+              placeholder="DD/MM/YYYY"
+              onChange={(val) => {
                 setCustomDate(val);
                 load(filterBranch, "custom_date", val, startDate, endDate);
               }}
-              className="w-full sm:w-40"
+              className="w-full sm:w-36"
             />
           </div>
         )}
 
         {dateMode === "custom_range" && (
           <div className="flex items-center gap-1.5">
-            <Input
-              type="date"
+            <DatePickerInput
               value={startDate}
-              placeholder="Dari"
-              onChange={(e) => {
-                const val = e.target.value;
+              placeholder="DD/MM/YYYY"
+              onChange={(val) => {
                 setStartDate(val);
                 load(filterBranch, "custom_range", customDate, val, endDate);
               }}
               className="w-full sm:w-36"
             />
             <span className="text-xs text-muted-foreground">s/d</span>
-            <Input
-              type="date"
+            <DatePickerInput
               value={endDate}
-              placeholder="Sampai"
-              onChange={(e) => {
-                const val = e.target.value;
+              placeholder="DD/MM/YYYY"
+              onChange={(val) => {
                 setEndDate(val);
                 load(filterBranch, "custom_range", customDate, startDate, val);
               }}
