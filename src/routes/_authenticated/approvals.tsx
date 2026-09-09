@@ -136,7 +136,13 @@ function ApprovalsPage() {
     if (error) {
       toast.error("Gagal memproses persetujuan: " + error.message);
     } else {
-      if (approveDialog.shift_id) {
+      const isCapitalReq =
+        Boolean(approveDialog.notes?.toLowerCase().includes("modal")) &&
+        !approveDialog.notes?.toLowerCase().includes("setoran") &&
+        !approveDialog.notes?.toLowerCase().includes("tutup shif") &&
+        approveDialog.currency?.code === "IDR";
+
+      if (approveDialog.shift_id && isCapitalReq) {
         await supabase
           .from("shifts")
           .update({ opening_capital: finalAmount })
@@ -166,7 +172,13 @@ function ApprovalsPage() {
     if (error) {
       toast.error("Gagal memproses transfer: " + error.message);
     } else {
-      if (status === "accepted" && transfer.shift_id) {
+      const isCapitalReq =
+        Boolean(transfer.notes?.toLowerCase().includes("modal")) &&
+        !transfer.notes?.toLowerCase().includes("setoran") &&
+        !transfer.notes?.toLowerCase().includes("tutup shif") &&
+        transfer.currency?.code === "IDR";
+
+      if (status === "accepted" && transfer.shift_id && isCapitalReq) {
         await supabase
           .from("shifts")
           .update({ opening_capital: transfer.amount })
