@@ -14,6 +14,14 @@ export interface AppSettings {
   shift_siang_end: string;
   prevent_oversell: boolean;
   transaction_threshold_usd: number;
+  threshold_individual_buy_enabled: boolean;
+  threshold_individual_buy_usd: number;
+  threshold_individual_sell_enabled: boolean;
+  threshold_individual_sell_usd: number;
+  threshold_corporate_buy_enabled: boolean;
+  threshold_corporate_buy_usd: number;
+  threshold_corporate_sell_enabled: boolean;
+  threshold_corporate_sell_usd: number;
 }
 
 const DEFAULT: AppSettings = {
@@ -29,22 +37,37 @@ const DEFAULT: AppSettings = {
   shift_siang_end: "22:00",
   prevent_oversell: false,
   transaction_threshold_usd: 10000,
+  threshold_individual_buy_enabled: true,
+  threshold_individual_buy_usd: 10000,
+  threshold_individual_sell_enabled: true,
+  threshold_individual_sell_usd: 10000,
+  threshold_corporate_buy_enabled: true,
+  threshold_corporate_buy_usd: 10000,
+  threshold_corporate_sell_enabled: true,
+  threshold_corporate_sell_usd: 10000,
 };
 
 let cache: AppSettings | null = null;
 const listeners = new Set<(s: AppSettings) => void>();
 
 async function fetchSettings(): Promise<AppSettings> {
-  const { data } = await supabase
+  const { data } = await (supabase
     .from("app_settings")
     .select(
-      "company_name, company_address, company_phone, license_pva, npwp_number, shift_pagi_start, shift_pagi_end, shift_siang_start, shift_siang_end, prevent_oversell, transaction_threshold_usd, logo_url",
+      "company_name, company_address, company_phone, license_pva, npwp_number, shift_pagi_start, shift_pagi_end, shift_siang_start, shift_siang_end, prevent_oversell, transaction_threshold_usd, logo_url, threshold_individual_buy_enabled, threshold_individual_buy_usd, threshold_individual_sell_enabled, threshold_individual_sell_usd, threshold_corporate_buy_enabled, threshold_corporate_buy_usd, threshold_corporate_sell_enabled, threshold_corporate_sell_usd" as any,
     )
     .eq("id", true)
-    .maybeSingle();
+    .maybeSingle() as any);
   const trim = (v: unknown) =>
     typeof v === "string" ? v.slice(0, 5) : undefined;
   const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const num = (v: unknown, fallback: number) => {
+    const n = Number(v);
+    return isNaN(n) ? fallback : n;
+  };
+  const bool = (v: unknown, fallback: boolean) =>
+    v === undefined || v === null ? fallback : !!v;
+
   const next: AppSettings = {
     company_name: (data?.company_name as string) || DEFAULT.company_name,
     company_address: str((data as Record<string, unknown> | null)?.company_address),
@@ -59,6 +82,14 @@ async function fetchSettings(): Promise<AppSettings> {
     shift_siang_end: trim(data?.shift_siang_end) || DEFAULT.shift_siang_end,
     prevent_oversell: !!data?.prevent_oversell,
     transaction_threshold_usd: Number(data?.transaction_threshold_usd) || DEFAULT.transaction_threshold_usd,
+    threshold_individual_buy_enabled: bool(data?.threshold_individual_buy_enabled, DEFAULT.threshold_individual_buy_enabled),
+    threshold_individual_buy_usd: num(data?.threshold_individual_buy_usd, DEFAULT.threshold_individual_buy_usd),
+    threshold_individual_sell_enabled: bool(data?.threshold_individual_sell_enabled, DEFAULT.threshold_individual_sell_enabled),
+    threshold_individual_sell_usd: num(data?.threshold_individual_sell_usd, DEFAULT.threshold_individual_sell_usd),
+    threshold_corporate_buy_enabled: bool(data?.threshold_corporate_buy_enabled, DEFAULT.threshold_corporate_buy_enabled),
+    threshold_corporate_buy_usd: num(data?.threshold_corporate_buy_usd, DEFAULT.threshold_corporate_buy_usd),
+    threshold_corporate_sell_enabled: bool(data?.threshold_corporate_sell_enabled, DEFAULT.threshold_corporate_sell_enabled),
+    threshold_corporate_sell_usd: num(data?.threshold_corporate_sell_usd, DEFAULT.threshold_corporate_sell_usd),
   };
   cache = next;
   listeners.forEach((l) => l(next));

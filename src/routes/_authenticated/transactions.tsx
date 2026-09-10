@@ -157,6 +157,7 @@ interface CustomerOpt {
   kyc_status: string;
   is_blacklisted: boolean;
   blacklist_reason?: string | null;
+  customer_type?: "individual" | "corporate" | string | null;
 }
 interface RateRow {
   currency_id: string;
@@ -407,7 +408,7 @@ function TransactionsPage() {
         .order("code"),
       supabase
         .from("customers")
-        .select("id, customer_code, full_name, risk_rating, kyc_status, is_blacklisted, blacklist_reason")
+        .select("id, customer_code, full_name, risk_rating, kyc_status, is_blacklisted, blacklist_reason, customer_type")
         .order("full_name")
         .limit(500),
       supabase
@@ -636,22 +637,48 @@ function TransactionsPage() {
 
     // 1. Check Monthly Threshold for Customers
     if (form.customer_id !== NO_CUSTOMER) {
-      const { data: withinThreshold, error: thresholdError } = await supabase.rpc(
-        "check_transaction_threshold",
-        {
-          p_customer_id: form.customer_id,
-          p_new_amount_idr: idrAmount,
-          p_threshold_usd: settings.transaction_threshold_usd || 10000,
-        }
-      );
+      let custType = customers.find((c) => c.id === form.customer_id)?.customer_type;
+      if (!custType) {
+        const { data: custData } = await supabase
+          .from("customers")
+          .select("customer_type")
+          .eq("id", form.customer_id)
+          .maybeSingle();
+        custType = custData?.customer_type;
+      }
 
-      if (thresholdError) {
-        console.error("Threshold check error:", thresholdError);
-      } else if (withinThreshold === false) {
-        toast.error("Melebihi ambang batas bulanan", {
-          description: `Total transaksi nasabah bulan ini akan melebihi batas $${(settings.transaction_threshold_usd || 10000).toLocaleString()}.`,
-        });
-        return;
+      const isCorporate = custType === "corporate";
+      const isBuy = form.transaction_type === "buy";
+
+      const isThresholdEnabled = isCorporate
+        ? (isBuy ? settings.threshold_corporate_buy_enabled : settings.threshold_corporate_sell_enabled)
+        : (isBuy ? settings.threshold_individual_buy_enabled : settings.threshold_individual_sell_enabled);
+
+      const thresholdLimitUsd = isCorporate
+        ? (isBuy ? settings.threshold_corporate_buy_usd : settings.threshold_corporate_sell_usd)
+        : (isBuy ? settings.threshold_individual_buy_usd : settings.threshold_individual_sell_usd);
+
+      if (isThresholdEnabled) {
+        const { data: withinThreshold, error: thresholdError } = await supabase.rpc(
+          "check_transaction_threshold" as any,
+          {
+            p_customer_id: form.customer_id,
+            p_new_amount_idr: idrAmount,
+            p_threshold_usd: thresholdLimitUsd || 10000,
+            p_transaction_type: form.transaction_type,
+          }
+        );
+
+        if (thresholdError) {
+          console.error("Threshold check error:", thresholdError);
+        } else if (withinThreshold === false) {
+          const typeLabel = isBuy ? "Beli Valas" : "Jual Valas";
+          const custCategory = isCorporate ? "Badan Usaha" : "Perseorangan";
+          toast.error("Melebihi ambang batas bulanan", {
+            description: `Total transaksi ${typeLabel} nasabah ${custCategory} bulan ini akan melebihi batas $${(thresholdLimitUsd || 10000).toLocaleString()}.`,
+          });
+          return;
+        }
       }
     }
 

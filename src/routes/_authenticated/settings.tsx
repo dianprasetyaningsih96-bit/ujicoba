@@ -15,6 +15,7 @@ import {
   Building2,
   MapPin,
   Phone,
+  User,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SUPABASE_PROJECT_ID, SUPABASE_URL } from "@/integrations/supabase/config";
@@ -61,6 +62,14 @@ function SettingsPage() {
   const [siangEnd, setSiangEnd] = useState(settings.shift_siang_end);
   const [preventOversell, setPreventOversell] = useState(settings.prevent_oversell);
   const [thresholdUsd, setThresholdUsd] = useState(settings.transaction_threshold_usd);
+  const [indivBuyEnabled, setIndivBuyEnabled] = useState(settings.threshold_individual_buy_enabled);
+  const [indivBuyUsd, setIndivBuyUsd] = useState(settings.threshold_individual_buy_usd);
+  const [indivSellEnabled, setIndivSellEnabled] = useState(settings.threshold_individual_sell_enabled);
+  const [indivSellUsd, setIndivSellUsd] = useState(settings.threshold_individual_sell_usd);
+  const [corpBuyEnabled, setCorpBuyEnabled] = useState(settings.threshold_corporate_buy_enabled);
+  const [corpBuyUsd, setCorpBuyUsd] = useState(settings.threshold_corporate_buy_usd);
+  const [corpSellEnabled, setCorpSellEnabled] = useState(settings.threshold_corporate_sell_enabled);
+  const [corpSellUsd, setCorpSellUsd] = useState(settings.threshold_corporate_sell_usd);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -104,6 +113,14 @@ function SettingsPage() {
     setSiangEnd(settings.shift_siang_end);
     setPreventOversell(settings.prevent_oversell);
     setThresholdUsd(settings.transaction_threshold_usd);
+    setIndivBuyEnabled(settings.threshold_individual_buy_enabled);
+    setIndivBuyUsd(settings.threshold_individual_buy_usd);
+    setIndivSellEnabled(settings.threshold_individual_sell_enabled);
+    setIndivSellUsd(settings.threshold_individual_sell_usd);
+    setCorpBuyEnabled(settings.threshold_corporate_buy_enabled);
+    setCorpBuyUsd(settings.threshold_corporate_buy_usd);
+    setCorpSellEnabled(settings.threshold_corporate_sell_enabled);
+    setCorpSellUsd(settings.threshold_corporate_sell_usd);
   }, [settings]);
 
   useEffect(() => {
@@ -215,9 +232,17 @@ function SettingsPage() {
         shift_siang_end: siangEnd,
         prevent_oversell: preventOversell,
         transaction_threshold_usd: thresholdUsd,
+        threshold_individual_buy_enabled: indivBuyEnabled,
+        threshold_individual_buy_usd: indivBuyUsd,
+        threshold_individual_sell_enabled: indivSellEnabled,
+        threshold_individual_sell_usd: indivSellUsd,
+        threshold_corporate_buy_enabled: corpBuyEnabled,
+        threshold_corporate_buy_usd: corpBuyUsd,
+        threshold_corporate_sell_enabled: corpSellEnabled,
+        threshold_corporate_sell_usd: corpSellUsd,
         updated_at: new Date().toISOString(),
         updated_by: userRes.user?.id ?? null,
-      })
+      } as any)
       .eq("id", true);
 
     if (settingsError) {
@@ -574,22 +599,200 @@ function SettingsPage() {
             />
           </div>
 
-          <div className="space-y-2 border-t pt-4">
-            <Label htmlFor="threshold-usd">Ambang Batas Transaksi Bulanan Nasabah (USD)</Label>
-            <div className="flex items-center gap-4">
-              <Input
-                id="threshold-usd"
-                type="text"
-                inputMode="numeric"
-                value={thresholdUsd ? new Intl.NumberFormat("id-ID").format(thresholdUsd) : ""}
-                onChange={(e) => setThresholdUsd(Number(e.target.value.replace(/[^\d]/g, "")))}
-                placeholder="10000"
-                disabled={loading || saving}
-                className="max-w-[200px]"
-              />
-              <p className="text-sm text-muted-foreground">
-                Maksimal akumulasi transaksi nasabah per bulan dalam ekuivalen USD.
+          <div className="space-y-4 border-t pt-4">
+            <div>
+              <Label className="text-base font-medium">
+                Ambang Batas Transaksi Bulanan Nasabah (USD)
+              </Label>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Atur batasan akumulasi transaksi bulanan per nasabah dalam ekuivalen USD secara terpisah untuk Perseorangan dan Badan Usaha (Jual & Beli). Jika toggle dinonaktifkan, transaksi tidak akan dibatasi ambang batas.
               </p>
+            </div>
+
+            {/* Kategori 1: Perseorangan */}
+            <div className="rounded-lg border bg-card/60 p-4 space-y-4">
+              <div className="flex items-center justify-between border-b pb-2.5">
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <User className="h-4 w-4 text-primary" />
+                  <span>Nasabah Perseorangan (Individual)</span>
+                </div>
+                <Badge variant="outline" className="text-xs">Perseorangan</Badge>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Beli Valas */}
+                <div className="rounded-md border bg-background p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="indiv-buy-toggle" className="text-sm font-semibold cursor-pointer">
+                        Beli Valas
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        KUPVA beli dari nasabah
+                      </p>
+                    </div>
+                    <Switch
+                      id="indiv-buy-toggle"
+                      checked={indivBuyEnabled}
+                      onCheckedChange={setIndivBuyEnabled}
+                      disabled={loading || saving}
+                    />
+                  </div>
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Batas Maksimal Bulanan</span>
+                      <span className={indivBuyEnabled ? "text-primary font-medium" : "text-muted-foreground"}>
+                        {indivBuyEnabled ? "Aktif" : "Nonaktif"}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs font-semibold text-muted-foreground">USD</span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={indivBuyUsd ? new Intl.NumberFormat("id-ID").format(indivBuyUsd) : ""}
+                        onChange={(e) => setIndivBuyUsd(Number(e.target.value.replace(/[^\d]/g, "")))}
+                        placeholder="10.000"
+                        disabled={!indivBuyEnabled || loading || saving}
+                        className="pl-12"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Jual Valas */}
+                <div className="rounded-md border bg-background p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="indiv-sell-toggle" className="text-sm font-semibold cursor-pointer">
+                        Jual Valas
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        KUPVA jual ke nasabah
+                      </p>
+                    </div>
+                    <Switch
+                      id="indiv-sell-toggle"
+                      checked={indivSellEnabled}
+                      onCheckedChange={setIndivSellEnabled}
+                      disabled={loading || saving}
+                    />
+                  </div>
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Batas Maksimal Bulanan</span>
+                      <span className={indivSellEnabled ? "text-primary font-medium" : "text-muted-foreground"}>
+                        {indivSellEnabled ? "Aktif" : "Nonaktif"}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs font-semibold text-muted-foreground">USD</span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={indivSellUsd ? new Intl.NumberFormat("id-ID").format(indivSellUsd) : ""}
+                        onChange={(e) => setIndivSellUsd(Number(e.target.value.replace(/[^\d]/g, "")))}
+                        placeholder="10.000"
+                        disabled={!indivSellEnabled || loading || saving}
+                        className="pl-12"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Kategori 2: Badan Usaha */}
+            <div className="rounded-lg border bg-card/60 p-4 space-y-4">
+              <div className="flex items-center justify-between border-b pb-2.5">
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  <span>Nasabah Badan Usaha (Corporate)</span>
+                </div>
+                <Badge variant="outline" className="text-xs">Badan Usaha</Badge>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Beli Valas */}
+                <div className="rounded-md border bg-background p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="corp-buy-toggle" className="text-sm font-semibold cursor-pointer">
+                        Beli Valas
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        KUPVA beli dari badan usaha
+                      </p>
+                    </div>
+                    <Switch
+                      id="corp-buy-toggle"
+                      checked={corpBuyEnabled}
+                      onCheckedChange={setCorpBuyEnabled}
+                      disabled={loading || saving}
+                    />
+                  </div>
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Batas Maksimal Bulanan</span>
+                      <span className={corpBuyEnabled ? "text-primary font-medium" : "text-muted-foreground"}>
+                        {corpBuyEnabled ? "Aktif" : "Nonaktif"}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs font-semibold text-muted-foreground">USD</span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={corpBuyUsd ? new Intl.NumberFormat("id-ID").format(corpBuyUsd) : ""}
+                        onChange={(e) => setCorpBuyUsd(Number(e.target.value.replace(/[^\d]/g, "")))}
+                        placeholder="10.000"
+                        disabled={!corpBuyEnabled || loading || saving}
+                        className="pl-12"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Jual Valas */}
+                <div className="rounded-md border bg-background p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="corp-sell-toggle" className="text-sm font-semibold cursor-pointer">
+                        Jual Valas
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        KUPVA jual ke badan usaha
+                      </p>
+                    </div>
+                    <Switch
+                      id="corp-sell-toggle"
+                      checked={corpSellEnabled}
+                      onCheckedChange={setCorpSellEnabled}
+                      disabled={loading || saving}
+                    />
+                  </div>
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Batas Maksimal Bulanan</span>
+                      <span className={corpSellEnabled ? "text-primary font-medium" : "text-muted-foreground"}>
+                        {corpSellEnabled ? "Aktif" : "Nonaktif"}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs font-semibold text-muted-foreground">USD</span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={corpSellUsd ? new Intl.NumberFormat("id-ID").format(corpSellUsd) : ""}
+                        onChange={(e) => setCorpSellUsd(Number(e.target.value.replace(/[^\d]/g, "")))}
+                        placeholder="10.000"
+                        disabled={!corpSellEnabled || loading || saving}
+                        className="pl-12"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
