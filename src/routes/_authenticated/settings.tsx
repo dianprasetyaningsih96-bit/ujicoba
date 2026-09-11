@@ -16,6 +16,8 @@ import {
   MapPin,
   Phone,
   User,
+  Hash,
+  FileText,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SUPABASE_PROJECT_ID, SUPABASE_URL } from "@/integrations/supabase/config";
@@ -40,6 +42,7 @@ interface BranchSetting {
   city: string;
   phone: string;
   is_head_office: boolean;
+  branch_letter: string;
 }
 
 function SettingsPage() {
@@ -70,6 +73,9 @@ function SettingsPage() {
   const [corpBuyUsd, setCorpBuyUsd] = useState(settings.threshold_corporate_buy_usd);
   const [corpSellEnabled, setCorpSellEnabled] = useState(settings.threshold_corporate_sell_enabled);
   const [corpSellUsd, setCorpSellUsd] = useState(settings.threshold_corporate_sell_usd);
+  const [txPrefixCompany, setTxPrefixCompany] = useState(settings.tx_prefix_company || "AMV");
+  const [txPrefixBuy, setTxPrefixBuy] = useState(settings.tx_prefix_buy || "1");
+  const [txPrefixSell, setTxPrefixSell] = useState(settings.tx_prefix_sell || "2");
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,13 +83,13 @@ function SettingsPage() {
     setBranchesLoading(true);
     const { data } = await supabase
       .from("branches")
-      .select("id, code, name, address, city, phone, is_head_office")
+      .select("id, code, name, address, city, phone, is_head_office, branch_letter" as any)
       .order("is_head_office", { ascending: false })
       .order("code");
     setBranchesLoading(false);
     if (data) {
       setBranches(
-        data.map((b) => ({
+        (data as any[]).map((b) => ({
           id: b.id,
           code: b.code,
           name: b.name,
@@ -91,6 +97,7 @@ function SettingsPage() {
           city: b.city || "",
           phone: b.phone || "",
           is_head_office: !!b.is_head_office,
+          branch_letter: b.branch_letter || (b.is_head_office ? "J" : (b.code?.includes("03") ? "L" : b.name[0]?.toUpperCase() || "J")),
         })),
       );
     }
@@ -121,6 +128,9 @@ function SettingsPage() {
     setCorpBuyUsd(settings.threshold_corporate_buy_usd);
     setCorpSellEnabled(settings.threshold_corporate_sell_enabled);
     setCorpSellUsd(settings.threshold_corporate_sell_usd);
+    setTxPrefixCompany(settings.tx_prefix_company || "AMV");
+    setTxPrefixBuy(settings.tx_prefix_buy || "1");
+    setTxPrefixSell(settings.tx_prefix_sell || "2");
   }, [settings]);
 
   useEffect(() => {
@@ -240,6 +250,9 @@ function SettingsPage() {
         threshold_corporate_buy_usd: corpBuyUsd,
         threshold_corporate_sell_enabled: corpSellEnabled,
         threshold_corporate_sell_usd: corpSellUsd,
+        tx_prefix_company: txPrefixCompany.trim().toUpperCase() || "AMV",
+        tx_prefix_buy: txPrefixBuy.trim().toUpperCase() || "1",
+        tx_prefix_sell: txPrefixSell.trim().toUpperCase() || "2",
         updated_at: new Date().toISOString(),
         updated_by: userRes.user?.id ?? null,
       } as any)
@@ -251,16 +264,17 @@ function SettingsPage() {
       return;
     }
 
-    // Save each branch's address, city, and phone to branches table
+    // Save each branch's address, city, phone, and branch_letter to branches table
     for (const b of branches) {
-      const { error: branchError } = await supabase
+      const { error: branchError } = await (supabase
         .from("branches")
         .update({
           address: b.address.trim() || null,
           city: b.city.trim() || null,
           phone: b.phone.trim() || null,
-        })
-        .eq("id", b.id);
+          branch_letter: b.branch_letter ? b.branch_letter.trim().toUpperCase() : null,
+        } as any)
+        .eq("id", b.id) as any);
 
       if (branchError) {
         console.error("Gagal memperbarui cabang:", b.code, branchError);
@@ -468,7 +482,7 @@ function SettingsPage() {
                       />
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
                         <Label htmlFor={`branch-city-${b.id}`} className="text-xs font-medium">
                           Kota / Kabupaten
@@ -499,6 +513,24 @@ function SettingsPage() {
                           }}
                           placeholder="Contoh: +62 812-4668-468"
                           disabled={loading || saving}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`branch-letter-${b.id}`} className="text-xs font-medium">
+                          Inisial No. Transaksi
+                        </Label>
+                        <Input
+                          id={`branch-letter-${b.id}`}
+                          value={b.branch_letter}
+                          onChange={(e) => {
+                            const updated = [...branches];
+                            updated[idx] = { ...b, branch_letter: e.target.value.toUpperCase() };
+                            setBranches(updated);
+                          }}
+                          placeholder="J / L / C"
+                          disabled={loading || saving}
+                          maxLength={3}
+                          className="font-mono uppercase text-center font-bold"
                         />
                       </div>
                     </div>
@@ -804,6 +836,142 @@ function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {hasAnyRole(roles, ["super_admin", "owner"]) && (
+        <Card className="max-w-2xl">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Hash className="h-5 w-5 text-primary" />
+              Prefix & Format Nomor Transaksi
+            </CardTitle>
+            <CardDescription>
+              Atur format prefix nomor transaksi untuk operasional Beli dan Jual di seluruh cabang (Khusus Super Admin).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="tx-prefix-company" className="font-semibold">
+                Awalan Kode Perusahaan (Company Prefix)
+              </Label>
+              <Input
+                id="tx-prefix-company"
+                value={txPrefixCompany}
+                onChange={(e) => setTxPrefixCompany(e.target.value.toUpperCase())}
+                placeholder="Contoh: AMV"
+                disabled={loading || saving}
+                maxLength={10}
+                className="max-w-[200px] font-mono uppercase"
+              />
+              <p className="text-xs text-muted-foreground">
+                Singkatan nama money changer pada awalan nomor transaksi (Default: AMV).
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t">
+              {/* Prefix Beli */}
+              <div className="rounded-lg border bg-emerald-500/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="tx-prefix-buy" className="text-sm font-semibold">
+                    Prefix / Kode Transaksi Beli
+                  </Label>
+                  <Badge variant="outline" className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300">
+                    Beli Valas
+                  </Badge>
+                </div>
+                <div className="space-y-1.5">
+                  <Input
+                    id="tx-prefix-buy"
+                    value={txPrefixBuy}
+                    onChange={(e) => setTxPrefixBuy(e.target.value.toUpperCase())}
+                    placeholder="Contoh: 1"
+                    disabled={loading || saving}
+                    maxLength={6}
+                    className="font-mono uppercase text-base"
+                  />
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Kode pembeda untuk transaksi Beli Valas dari nasabah (Default: <strong>1</strong>).
+                  </p>
+                </div>
+              </div>
+
+              {/* Prefix Jual */}
+              <div className="rounded-lg border bg-rose-500/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="tx-prefix-sell" className="text-sm font-semibold">
+                    Prefix / Kode Transaksi Jual
+                  </Label>
+                  <Badge variant="outline" className="text-xs bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300">
+                    Jual Valas
+                  </Badge>
+                </div>
+                <div className="space-y-1.5">
+                  <Input
+                    id="tx-prefix-sell"
+                    value={txPrefixSell}
+                    onChange={(e) => setTxPrefixSell(e.target.value.toUpperCase())}
+                    placeholder="Contoh: 2"
+                    disabled={loading || saving}
+                    maxLength={6}
+                    className="font-mono uppercase text-base"
+                  />
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Kode pembeda untuk transaksi Jual Valas ke nasabah (Default: <strong>2</strong>).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Interactive Preview */}
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" />
+                  Pratinjau Nomor Transaksi (Live Preview)
+                </span>
+                <Badge variant="secondary" className="text-[10px]">Real-time</Badge>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 text-xs">
+                {branches.map((b) => {
+                  const bLetter = b.branch_letter || (b.is_head_office ? "J" : (b.code?.includes("03") ? "L" : b.name[0]?.toUpperCase() || "J"));
+                  const buyExample = `${txPrefixCompany.trim() || "AMV"}${bLetter}${txPrefixBuy.trim() || "1"}-20260911-001`;
+                  const sellExample = `${txPrefixCompany.trim() || "AMV"}${bLetter}${txPrefixSell.trim() || "2"}-20260911-001`;
+
+                  return (
+                    <div key={b.id} className="p-2.5 rounded-md border bg-background space-y-2">
+                      <div className="font-semibold text-foreground flex items-center justify-between">
+                        <span>{b.name}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">Inisial: {bLetter}</span>
+                      </div>
+                      <div className="space-y-1 font-mono">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground text-[11px]">Beli:</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{buyExample}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground text-[11px]">Jual:</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400">{sellExample}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="text-[11px] text-muted-foreground leading-relaxed pt-1">
+                Format: <code className="bg-muted px-1 py-0.5 rounded text-[11px] font-mono">[Awalan Perusahaan][Inisial Cabang][Kode Tipe]-[YYYYMMDD]-[No. Urut 3 Digit]</code>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={handleSave} disabled={saving || loading} className="gap-2">
+                <Save className="h-4 w-4" />
+                {saving ? "Menyimpan…" : "Simpan Format Nomor Transaksi"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {hasAnyRole(roles, ["super_admin"]) && <ConnectionCard />}
     </div>

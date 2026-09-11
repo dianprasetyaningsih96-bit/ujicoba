@@ -22,6 +22,9 @@ export interface AppSettings {
   threshold_corporate_buy_usd: number;
   threshold_corporate_sell_enabled: boolean;
   threshold_corporate_sell_usd: number;
+  tx_prefix_company: string;
+  tx_prefix_buy: string;
+  tx_prefix_sell: string;
 }
 
 const DEFAULT: AppSettings = {
@@ -45,6 +48,9 @@ const DEFAULT: AppSettings = {
   threshold_corporate_buy_usd: 10000,
   threshold_corporate_sell_enabled: true,
   threshold_corporate_sell_usd: 10000,
+  tx_prefix_company: "AMV",
+  tx_prefix_buy: "1",
+  tx_prefix_sell: "2",
 };
 
 let cache: AppSettings | null = null;
@@ -54,7 +60,7 @@ async function fetchSettings(): Promise<AppSettings> {
   const { data } = await (supabase
     .from("app_settings")
     .select(
-      "company_name, company_address, company_phone, license_pva, npwp_number, shift_pagi_start, shift_pagi_end, shift_siang_start, shift_siang_end, prevent_oversell, transaction_threshold_usd, logo_url, threshold_individual_buy_enabled, threshold_individual_buy_usd, threshold_individual_sell_enabled, threshold_individual_sell_usd, threshold_corporate_buy_enabled, threshold_corporate_buy_usd, threshold_corporate_sell_enabled, threshold_corporate_sell_usd" as any,
+      "company_name, company_address, company_phone, license_pva, npwp_number, shift_pagi_start, shift_pagi_end, shift_siang_start, shift_siang_end, prevent_oversell, transaction_threshold_usd, logo_url, threshold_individual_buy_enabled, threshold_individual_buy_usd, threshold_individual_sell_enabled, threshold_individual_sell_usd, threshold_corporate_buy_enabled, threshold_corporate_buy_usd, threshold_corporate_sell_enabled, threshold_corporate_sell_usd, tx_prefix_company, tx_prefix_buy, tx_prefix_sell" as any,
     )
     .eq("id", true)
     .maybeSingle() as any);
@@ -90,6 +96,9 @@ async function fetchSettings(): Promise<AppSettings> {
     threshold_corporate_buy_usd: num(data?.threshold_corporate_buy_usd, DEFAULT.threshold_corporate_buy_usd),
     threshold_corporate_sell_enabled: bool(data?.threshold_corporate_sell_enabled, DEFAULT.threshold_corporate_sell_enabled),
     threshold_corporate_sell_usd: num(data?.threshold_corporate_sell_usd, DEFAULT.threshold_corporate_sell_usd),
+    tx_prefix_company: str(data?.tx_prefix_company) || DEFAULT.tx_prefix_company,
+    tx_prefix_buy: str(data?.tx_prefix_buy) || DEFAULT.tx_prefix_buy,
+    tx_prefix_sell: str(data?.tx_prefix_sell) || DEFAULT.tx_prefix_sell,
   };
   cache = next;
   listeners.forEach((l) => l(next));
