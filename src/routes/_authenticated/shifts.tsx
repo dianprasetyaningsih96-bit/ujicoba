@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Clock, LogIn, LogOut, Play, Square } from "lucide-react";
+import { Clock, LogIn, LogOut, Play, Square, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { useAppSettings } from "@/hooks/use-app-settings";
@@ -78,6 +78,7 @@ function ShiftsPage() {
 
   const [openDialog, setOpenDialog] = useState(false);
   const [closeDialog, setCloseDialog] = useState<ShiftRow | null>(null);
+  const [editingShift, setEditingShift] = useState<ShiftRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,33 +120,43 @@ function ShiftsPage() {
       rows = rows.map((r) => ({ ...r, user: map.get(r.user_id) ?? null }));
     }
     setShifts(rows);
-    setMyOpenShift(rows.find((r) => r.user_id === user?.id && r.status === "open") ?? null);
+    const mine = rows.find((r) => r.user_id === user?.id && r.status === "open");
+    setMyOpenShift(mine ?? null);
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, roles, profile?.branch_id]);
 
-  useEffect(() => { if (user?.id) load(); }, [user?.id, load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <div className="space-y-6">
       <MasterPageHeader
-        title="Shif Kerja"
-        description={`Jam operasional (WITA) — Pagi ${settings.shift_pagi_start}–${settings.shift_pagi_end} · Siang ${settings.shift_siang_start}–${settings.shift_siang_end}`}
-        canWrite={!myOpenShift}
-        onAdd={() => setOpenDialog(true)}
-        addLabel="Buka Shif"
+        title="Manajemen Shif Kasir"
+        description="Buka dan tutup shif kerja kasir, serah terima modal, serta rekonsiliasi kas."
+        action={
+          !myOpenShift && (
+            <Button onClick={() => setOpenDialog(true)} className="gap-2">
+              <Play className="h-4 w-4" /> Buka Shif
+            </Button>
+          )
+        }
       />
 
       {myOpenShift && (
-        <Card className="border-primary/40 bg-primary/5">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-3">
+        <Card className="border-emerald-600/40 bg-emerald-500/5">
+          <CardHeader className="py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Clock className="h-4 w-4" />
-                  Shif Aktif Anda — {myOpenShift.shift_type === "pagi" ? "Pagi" : "Siang/Sore"}
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600 animate-pulse" />
+                  Shif Anda Sedang Aktif
                 </CardTitle>
-                <CardDescription>
-                  Dibuka {formatDateTime(myOpenShift.opened_at)}
+                <CardDescription className="mt-1">
+                  Cabang: <b>{myOpenShift.branch?.name ?? "—"}</b> · Shif:{" "}
+                  <Badge variant="outline" className="ml-1">
+                    {myOpenShift.shift_type === "pagi" ? "Pagi" : "Siang/Sore"}
+                  </Badge>
                   {myOpenShift.opening_capital > 0 && (
                     <> · Modal awal: <b>{formatIDR(myOpenShift.opening_capital)}</b>{myOpenShift.shift_type === "siang" ? " (Serah Terima)" : ""}</>
                   )}
@@ -216,11 +227,24 @@ function ShiftsPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    {s.status === "open" && (s.user_id === user?.id || isManager) && (
-                      <Button size="sm" variant="outline" onClick={() => setCloseDialog(s)} className="gap-1">
-                        <Square className="h-3 w-3" /> Tutup
-                      </Button>
-                    )}
+                    <div className="flex items-center justify-end gap-1">
+                      {s.status === "open" && (s.user_id === user?.id || isManager) && (
+                        <Button size="sm" variant="outline" onClick={() => setCloseDialog(s)} className="gap-1">
+                          <Square className="h-3 w-3" /> Tutup
+                        </Button>
+                      )}
+                      {hasAnyRole(roles, ["super_admin", "owner"]) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setEditingShift(s)}
+                          title="Koreksi Jenis Shif"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -250,7 +274,88 @@ function ShiftsPage() {
           userId={user?.id ?? ""}
         />
       )}
+
+      {editingShift && (
+        <EditShiftDialog
+          shift={editingShift}
+          onClose={() => setEditingShift(null)}
+          onSaved={() => { setEditingShift(null); load(); }}
+        />
+      )}
     </div>
+  );
+}
+
+function EditShiftDialog({
+  shift,
+  onClose,
+  onSaved,
+}: {
+  shift: ShiftRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [shiftType, setShiftType] = useState<ShiftType>(shift.shift_type);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("shifts")
+      .update({ shift_type: shiftType })
+      .eq("id", shift.id);
+    setSaving(false);
+
+    if (error) {
+      toast.error("Gagal mengubah shif: " + error.message);
+      return;
+    }
+
+    toast.success("Jenis shif berhasil diperbarui");
+    onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Koreksi Jenis Shif</DialogTitle>
+          <DialogDescription>
+            Ubah jenis shif untuk {shift.branch?.name ?? "Cabang"} (Buka: {formatDateTime(shift.opened_at)}).
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label>Pilih Jenis Shif</Label>
+            <Select value={shiftType} onValueChange={(v) => setShiftType(v as ShiftType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pagi">Shif Pagi</SelectItem>
+                <SelectItem value="siang">Shif Siang/Sore (Serah Terima)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md space-y-1">
+            <p><strong>Catatan:</strong></p>
+            <p>• Mengubah jenis shif tidak mempengaruhi saldo kas fisik maupun transaksi yang telah tercatat.</p>
+            <p>• Shif Siang/Sore otomatis ditandai sebagai serah terima lanjutan dari sisa kas shif pagi.</p>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Batal
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Menyimpan…" : "Simpan Perubahan"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
