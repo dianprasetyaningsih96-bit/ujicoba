@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { useAppSettings } from "@/hooks/use-app-settings";
 
 function NotFoundComponent() {
   return (
@@ -102,7 +103,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "shortcut icon", href: "/favicon.png", type: "image/png" },
+      { rel: "alternate icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "apple-touch-icon", href: "/favicon.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -131,11 +135,34 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function FaviconSync() {
+  const { settings } = useAppSettings();
+
+  useEffect(() => {
+    const iconUrl = settings.logo_url || "/favicon.png";
+    const existing = document.querySelectorAll<HTMLLinkElement>("link[rel*='icon']");
+    if (existing.length > 0) {
+      existing.forEach((el) => {
+        el.href = iconUrl;
+      });
+    } else {
+      const link = document.createElement("link");
+      link.rel = "icon";
+      link.type = "image/png";
+      link.href = iconUrl;
+      document.head.appendChild(link);
+    }
+  }, [settings.logo_url]);
+
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <FaviconSync />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster richColors position="top-right" expand={true} visibleToasts={6} gap={8} />
