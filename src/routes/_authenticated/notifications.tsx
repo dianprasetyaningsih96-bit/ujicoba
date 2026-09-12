@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { formatDistanceToNow, format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import {
@@ -84,6 +85,13 @@ function NotificationsPage() {
   const [severity, setSeverity] = useState<string>("all");
   const [q, setQ] = useState("");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tab, category, severity, q]);
+
   const filtered = useMemo(() => {
     return items.filter((n) => {
       if (tab === "unread" && userId && (n.read_by ?? []).includes(userId))
@@ -100,6 +108,11 @@ function NotificationsPage() {
       return true;
     });
   }, [items, tab, category, severity, q, userId]);
+
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   const stats = useMemo(() => {
     return {
@@ -268,7 +281,7 @@ function NotificationsPage() {
             </div>
           ) : (
             <ul className="divide-y rounded-lg border">
-              {filtered.map((n) => {
+              {paginatedItems.map((n) => {
                 const isUnread = userId
                   ? !(n.read_by ?? []).includes(userId)
                   : false;
@@ -336,6 +349,22 @@ function NotificationsPage() {
                 );
               })}
             </ul>
+          )}
+
+          {filtered.length > 0 && (
+            <div className="pt-2">
+              <DataTablePagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalRecords={filtered.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(sz) => {
+                  setPageSize(sz);
+                  setCurrentPage(1);
+                }}
+                entityLabel="notifikasi"
+              />
+            </div>
           )}
         </CardContent>
       </Card>

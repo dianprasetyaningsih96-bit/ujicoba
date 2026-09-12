@@ -39,6 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 export const Route = createFileRoute("/_authenticated/users")({
   component: UsersPage,
@@ -90,6 +91,13 @@ function UsersPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<Set<AppRole>>(new Set());
@@ -284,6 +292,11 @@ function UsersPage() {
         (p.phone ?? "").toLowerCase().includes(q),
     );
   }, [profiles, search]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   function openEdit(p: Profile) {
     setEditTarget(p);
@@ -482,7 +495,7 @@ function UsersPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((p) => {
+                  paginatedUsers.map((p) => {
                     const userRoles = rolesByUser.get(p.id) ?? [];
                     return (
                       <TableRow key={p.id}>
@@ -574,6 +587,19 @@ function UsersPage() {
               </TableBody>
             </Table>
           </div>
+          {filtered.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filtered.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              entityLabel="user"
+            />
+          )}
           <p className="text-xs text-muted-foreground">
             Super Admin dapat menambahkan user baru langsung dari tombol
             <b className="mx-1">Tambah User</b>. Pengguna juga dapat mendaftar

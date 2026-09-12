@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { MasterPageHeader } from "@/components/master-data/page-header";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { CustomerDocumentsDialog } from "@/components/customers/customer-documents-dialog";
 import { COUNTRIES } from "@/lib/countries";
 import { screenAgainstDttot } from "@/lib/dttot-screening";
@@ -315,6 +316,20 @@ function CustomersPage() {
     });
   }, [rows, search, filterKyc, filterRisk]);
 
+  // Pagination Nasabah
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterKyc, filterRisk]);
+
+  const paginatedRows = useMemo(() => {
+    if (!filtered) return null;
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
   const stats = useMemo(() => {
     if (!rows) return null;
     return {
@@ -575,7 +590,7 @@ function CustomersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((row) => (
+                paginatedRows?.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono text-xs">
                       {row.customer_code}
@@ -652,6 +667,20 @@ function CustomersPage() {
               )}
             </TableBody>
           </Table>
+
+          {filtered && (
+            <DataTablePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filtered.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              entityLabel="nasabah"
+            />
+          )}
         </CardContent>
       </Card>
 

@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { MasterPageHeader } from "@/components/master-data/page-header";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,15 @@ function ShiftsPage() {
   const [openDialog, setOpenDialog] = useState(false);
   const [closeDialog, setCloseDialog] = useState<ShiftRow | null>(null);
   const [editingShift, setEditingShift] = useState<ShiftRow | null>(null);
+
+  // Pagination Shif Kerja
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const paginatedShifts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return shifts.slice(start, start + pageSize);
+  }, [shifts, currentPage, pageSize]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -196,60 +206,74 @@ function ShiftsPage() {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Memuat…</TableCell></TableRow>
-              ) : shifts.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Belum ada shif</TableCell></TableRow>
-              ) : shifts.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.user?.full_name || s.user?.email || "—"}</TableCell>
-                  <TableCell>{s.branch?.name ?? "—"}</TableCell>
-                  <TableCell><Badge variant="outline">{s.shift_type === "pagi" ? "Pagi" : "Siang/Sore"}</Badge></TableCell>
-                  <TableCell className="whitespace-nowrap">{formatDateTime(s.opened_at)}</TableCell>
-                  <TableCell className="whitespace-nowrap">{formatDateTime(s.closed_at)}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {s.opening_capital > 0 ? (
-                      <div>
-                        <div className="font-medium">{formatIDR(s.opening_capital)}</div>
-                        {s.shift_type === "siang" && (
-                          <span className="text-[10px] text-muted-foreground block -mt-0.5">
-                            (Serah Terima)
-                          </span>
+              ) : (
+                paginatedShifts.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-medium">{s.user?.full_name || s.user?.email || "—"}</TableCell>
+                    <TableCell>{s.branch?.name ?? "—"}</TableCell>
+                    <TableCell><Badge variant="outline">{s.shift_type === "pagi" ? "Pagi" : "Siang/Sore"}</Badge></TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDateTime(s.opened_at)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDateTime(s.closed_at)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {s.opening_capital > 0 ? (
+                        <div>
+                          <div className="font-medium">{formatIDR(s.opening_capital)}</div>
+                          {s.shift_type === "siang" && (
+                            <span className="text-[10px] text-muted-foreground block -mt-0.5">
+                              (Serah Terima)
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {s.status === "open" ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600">Terbuka</Badge>
+                      ) : (
+                        <Badge variant="secondary">Tertutup</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {s.status === "open" && (s.user_id === user?.id || isManager) && (
+                          <Button size="sm" variant="outline" onClick={() => setCloseDialog(s)} className="gap-1">
+                            <Square className="h-3 w-3" /> Tutup
+                          </Button>
+                        )}
+                        {hasAnyRole(roles, ["super_admin", "owner"]) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingShift(s)}
+                            title="Koreksi Jenis Shif"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
                         )}
                       </div>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {s.status === "open" ? (
-                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Terbuka</Badge>
-                    ) : (
-                      <Badge variant="secondary">Tertutup</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {s.status === "open" && (s.user_id === user?.id || isManager) && (
-                        <Button size="sm" variant="outline" onClick={() => setCloseDialog(s)} className="gap-1">
-                          <Square className="h-3 w-3" /> Tutup
-                        </Button>
-                      )}
-                      {hasAnyRole(roles, ["super_admin", "owner"]) && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setEditingShift(s)}
-                          title="Koreksi Jenis Shif"
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
+
+          {shifts.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={shifts.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              entityLabel="shif kerja"
+            />
+          )}
         </CardContent>
       </Card>
 

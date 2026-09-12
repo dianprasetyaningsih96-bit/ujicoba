@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { History, Search, ArrowRight, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,10 +98,25 @@ function RatesHistoryPage() {
     load();
   }, [branchFilter]);
 
-  const filtered = rows?.filter(r => 
-    r.currency_code.toLowerCase().includes(search.toLowerCase()) ||
-    (r.profiles?.full_name || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    return rows?.filter(r => 
+      r.currency_code.toLowerCase().includes(search.toLowerCase()) ||
+      (r.profiles?.full_name || "").toLowerCase().includes(search.toLowerCase())
+    ) ?? [];
+  }, [rows, search]);
+
+  // Pagination Riwayat Kurs
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, branchFilter]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -177,7 +193,7 @@ function RatesHistoryPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered?.map((row) => (
+                paginatedRows?.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
                       <div className="font-bold">{format(new Date(row.changed_at), "HH:mm:ss")}</div>
@@ -223,6 +239,20 @@ function RatesHistoryPage() {
               )}
             </TableBody>
           </Table>
+
+          {filtered && filtered.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filtered.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              entityLabel="riwayat kurs"
+            />
+          )}
         </CardContent>
       </Card>
     </div>

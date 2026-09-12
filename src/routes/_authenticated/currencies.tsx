@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Pencil, Trash2, Coins } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { MasterPageHeader } from "@/components/master-data/page-header";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +88,16 @@ function CurrenciesPage() {
   const [deleting, setDeleting] = useState<Currency | null>(null);
   const [form, setForm] = useState<Form>(empty);
   const [saving, setSaving] = useState(false);
+
+  // Pagination Mata Uang
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const paginatedRows = useMemo(() => {
+    if (!rows) return null;
+    const start = (currentPage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, currentPage, pageSize]);
 
   async function load() {
     const { data, error } = await supabase
@@ -211,7 +222,7 @@ function CurrenciesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((row) => (
+                paginatedRows?.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono font-semibold">
                       {row.code}
@@ -252,6 +263,20 @@ function CurrenciesPage() {
               )}
             </TableBody>
           </Table>
+
+          {rows && rows.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={rows.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              entityLabel="mata uang"
+            />
+          )}
         </CardContent>
       </Card>
 

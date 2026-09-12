@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ArrowRightLeft, CheckCircle, XCircle, Clock, Building2, Eye, Ban, ArrowUpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 export const Route = createFileRoute("/_authenticated/approvals")({
   component: ApprovalsPage,
@@ -45,6 +46,14 @@ function ApprovalsPage() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const paginatedTransfers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return transfers.slice(start, start + pageSize);
+  }, [transfers, currentPage, pageSize]);
   
   // Dialog Tolak
   const [rejectDialog, setRejectDialog] = useState<Transfer | null>(null);
@@ -244,7 +253,8 @@ function ApprovalsPage() {
                 <TableRow><TableCell colSpan={7} className="text-center py-8">Memuat...</TableCell></TableRow>
               ) : transfers.length === 0 ? (
                 <TableRow><TableCell colSpan={7} className="text-center py-8">Tidak ada data transfer</TableCell></TableRow>
-              ) : transfers.map((t) => {
+              ) : (
+                paginatedTransfers.map((t) => {
                 const isCapitalReq = t.notes?.toLowerCase().includes("modal");
                 return (
                   <TableRow key={t.id}>
@@ -314,9 +324,26 @@ function ApprovalsPage() {
                     </TableCell>
                   </TableRow>
                 );
-              })}
+              })
+              )}
             </TableBody>
           </Table>
+
+          {transfers.length > 0 && (
+            <div className="border-t px-4 py-2">
+              <DataTablePagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalRecords={transfers.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(sz) => {
+                  setPageSize(sz);
+                  setCurrentPage(1);
+                }}
+                entityLabel="transfer"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

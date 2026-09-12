@@ -6,6 +6,7 @@ import { Pencil, Trash2, LineChart, History, Tv } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { MasterPageHeader } from "@/components/master-data/page-header";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -185,6 +186,19 @@ function RatesPage() {
     if (branchFilter === HQ) return rows.filter((r) => r.branch_id === null);
     return rows.filter((r) => r.branch_id === branchFilter);
   }, [rows, branchFilter]);
+
+  // Pagination Kurs Valuta
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [branchFilter]);
+
+  const paginatedRates = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, currentPage, pageSize]);
 
   function openCreate() {
     setEditing(null);
@@ -394,7 +408,7 @@ function RatesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredRows.map((row) => {
+                paginatedRates.map((row) => {
                   const sp = Number(row.sell_rate) - Number(row.buy_rate);
                   return (
                     <TableRow key={row.id}>
@@ -463,6 +477,20 @@ function RatesPage() {
               )}
             </TableBody>
           </Table>
+
+          {filteredRows.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filteredRows.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              entityLabel="kurs"
+            />
+          )}
         </CardContent>
       </Card>
 

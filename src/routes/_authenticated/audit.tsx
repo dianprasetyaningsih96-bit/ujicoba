@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 export const Route = createFileRoute("/_authenticated/audit")({
   component: AuditPage,
@@ -94,6 +95,13 @@ function AuditPage() {
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [detail, setDetail] = useState<AuditLog | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, tableFilter, actionFilter]);
+
   async function load() {
     setLoading(true);
     let q = supabase
@@ -133,6 +141,11 @@ function AuditPage() {
         (r.changed_fields ?? []).join(",").toLowerCase().includes(q),
     );
   }, [rows, search]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   function exportCsv() {
     const header = [
@@ -269,7 +282,7 @@ function AuditPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((r) => (
+                  paginatedRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {fmtDateTime(r.created_at)}
@@ -335,10 +348,19 @@ function AuditPage() {
               </TableBody>
             </Table>
           </div>
-          <div className="text-xs text-muted-foreground">
-            Menampilkan {filtered.length} dari {rows.length} log terakhir
-            (maks. 500).
-          </div>
+          {filtered.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filtered.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              entityLabel="log audit"
+            />
+          )}
         </CardContent>
       </Card>
 

@@ -17,6 +17,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { MasterPageHeader } from "@/components/master-data/page-header";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -168,7 +169,7 @@ function CashPage() {
 
   // Pagination Mutasi Terbaru
   const [movPage, setMovPage] = useState(1);
-  const MOV_PER_PAGE = 10;
+  const [movPageSize, setMovPageSize] = useState(10);
 
   async function loadRefs() {
     let branchQ = supabase
@@ -432,13 +433,12 @@ function CashPage() {
     };
   }, [balances]);
 
-  // Pagination valas siap jual (computed)
+  // Pagination mutasi terbaru (computed)
   const pagedMovements = useMemo(() => {
     if (!movements) return [];
-    const start = (movPage - 1) * MOV_PER_PAGE;
-    return movements.slice(start, start + MOV_PER_PAGE);
-  }, [movements, movPage, MOV_PER_PAGE]);
-  const totalMovPages = movements ? Math.ceil(movements.length / MOV_PER_PAGE) : 1;
+    const start = (movPage - 1) * movPageSize;
+    return movements.slice(start, start + movPageSize);
+  }, [movements, movPage, movPageSize]);
 
 
 
@@ -825,54 +825,18 @@ function CashPage() {
             </TableBody>
           </Table>
           {/* ── Pagination Controls ── */}
-          {movements !== null && totalMovPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t">
-              <span className="text-xs text-muted-foreground">
-                Halaman <span className="font-semibold">{movPage}</span> dari <span className="font-semibold">{totalMovPages}</span>
-              </span>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  disabled={movPage === 1}
-                  onClick={() => setMovPage(1)}
-                  title="Halaman pertama"
-                >
-                  «
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1"
-                  disabled={movPage === 1}
-                  onClick={() => setMovPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Prev
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1"
-                  disabled={movPage === totalMovPages}
-                  onClick={() => setMovPage((p) => Math.min(totalMovPages, p + 1))}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  disabled={movPage === totalMovPages}
-                  onClick={() => setMovPage(totalMovPages)}
-                  title="Halaman terakhir"
-                >
-                  »
-                </Button>
-              </div>
-            </div>
+          {movements !== null && (
+            <DataTablePagination
+              currentPage={movPage}
+              pageSize={movPageSize}
+              totalRecords={movements.length}
+              onPageChange={setMovPage}
+              onPageSizeChange={(sz) => {
+                setMovPageSize(sz);
+                setMovPage(1);
+              }}
+              entityLabel="mutasi"
+            />
           )}
         </CardContent>
       </Card>

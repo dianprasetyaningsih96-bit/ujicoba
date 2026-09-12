@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { MasterPageHeader } from "@/components/master-data/page-header";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -310,10 +311,15 @@ function MidRatesPage() {
     setImporting(false);
   }
 
-  const grouped = useMemo(() => {
+  // Pagination Kurs Tengah
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const paginatedRows = useMemo(() => {
     if (!rows) return null;
-    return rows;
-  }, [rows]);
+    const start = (currentPage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, currentPage, pageSize]);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -389,7 +395,7 @@ function MidRatesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                grouped.map((row) => (
+                paginatedRows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">
                       {periodLabel(row.period_month)}
@@ -433,6 +439,20 @@ function MidRatesPage() {
               )}
             </TableBody>
           </Table>
+
+          {rows && rows.length > 0 && (
+            <DataTablePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={rows.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              entityLabel="kurs tengah"
+            />
+          )}
         </CardContent>
       </Card>
 
