@@ -11,14 +11,12 @@ import {
   Coins,
   CheckCircle2,
   AlertCircle,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { MasterPageHeader } from "@/components/master-data/page-header";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -682,13 +680,11 @@ function CashPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader>
           <CardTitle>Mutasi Terbaru</CardTitle>
-          {movements !== null && movements.length > 0 && (
-            <span className="text-xs text-muted-foreground">
-              {(movPage - 1) * MOV_PER_PAGE + 1}–{Math.min(movPage * MOV_PER_PAGE, movements.length)} dari {movements.length} mutasi
-            </span>
-          )}
+          <CardDescription>
+            Riwayat pergerakan kas masuk dan keluar di seluruh cabang.
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
