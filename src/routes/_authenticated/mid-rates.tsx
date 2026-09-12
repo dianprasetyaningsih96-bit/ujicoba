@@ -377,7 +377,7 @@ function MidRatesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {grouped === null ? (
+              {rows === null ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell colSpan={5}>
@@ -385,7 +385,7 @@ function MidRatesPage() {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : grouped.length === 0 ? (
+              ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-12">
                     <Scale className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
@@ -395,7 +395,7 @@ function MidRatesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedRows.map((row) => (
+                (paginatedRows ?? []).map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">
                       {periodLabel(row.period_month)}
