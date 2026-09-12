@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Clock, LogIn, LogOut, Play, Square, Pencil } from "lucide-react";
+import { Clock, LogIn, LogOut, Play, Square, Pencil, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { useAppSettings } from "@/hooks/use-app-settings";
@@ -382,36 +382,72 @@ function OpenShiftDialog({
   const [loadingPrev, setLoadingPrev] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [branchOpenShifts, setBranchOpenShifts] = useState<{ morningOpen: boolean; afternoonOpen: boolean }>({
-    morningOpen: false,
-    afternoonOpen: false,
+  const [todayShiftsState, setTodayShiftsState] = useState<{
+    morning: { exists: boolean; isOpen: boolean; isClosed: boolean };
+    afternoon: { exists: boolean; isOpen: boolean; isClosed: boolean };
+    loading: boolean;
+  }>({
+    morning: { exists: false, isOpen: false, isClosed: false },
+    afternoon: { exists: false, isOpen: false, isClosed: false },
+    loading: false,
   });
 
   useEffect(() => {
     if (!branchId && !lockBranch && branches.length) setBranchId(branches[0].id);
   }, [branches, branchId, lockBranch]);
 
-  // Cek apakah ada shif yang sedang terbuka di cabang ini untuk mendisable opsi shif
+  // Cek shif yang sudah dibuka pada hari kalender ini (WITA / Asia/Makassar) di cabang ini
   useEffect(() => {
     if (branchId) {
       (async () => {
+        setTodayShiftsState((prev) => ({ ...prev, loading: true }));
         try {
-          const { data: openShifts } = await supabase
+          // Tanggal kalender hari ini di zona waktu WITA (Asia/Makassar, UTC+8)
+          const nowWita = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Makassar" }));
+          const year = nowWita.getFullYear();
+          const month = String(nowWita.getMonth() + 1).padStart(2, "0");
+          const day = String(nowWita.getDate()).padStart(2, "0");
+          const todayDateStr = `${year}-${month}-${day}`;
+
+          const todayStartUtc = new Date(`${todayDateStr}T00:00:00+08:00`).toISOString();
+          const todayEndUtc = new Date(`${todayDateStr}T23:59:59.999+08:00`).toISOString();
+
+          const { data: todayShifts } = await supabase
             .from("shifts")
-            .select("shift_type, status")
+            .select("shift_type, status, opened_at")
             .eq("branch_id", branchId)
-            .eq("status", "open");
+            .gte("opened_at", todayStartUtc)
+            .lte("opened_at", todayEndUtc);
 
-          const morningOpen = Boolean(openShifts?.some((s) => s.shift_type === "pagi"));
-          const afternoonOpen = Boolean(openShifts?.some((s) => s.shift_type === "siang"));
-          
-          setBranchOpenShifts({ morningOpen, afternoonOpen });
+          const morningShift = todayShifts?.find((s) => s.shift_type === "pagi");
+          const afternoonShift = todayShifts?.find((s) => s.shift_type === "siang");
 
-          if (morningOpen && !afternoonOpen) {
+          const morning = {
+            exists: Boolean(morningShift),
+            isOpen: morningShift?.status === "open",
+            isClosed: morningShift?.status === "closed",
+          };
+          const afternoon = {
+            exists: Boolean(afternoonShift),
+            isOpen: afternoonShift?.status === "open",
+            isClosed: afternoonShift?.status === "closed",
+          };
+
+          setTodayShiftsState({
+            morning,
+            afternoon,
+            loading: false,
+          });
+
+          // Otomatis tentukan default shiftType ke shif yang belum dibuka hari ini
+          if (morning.exists && !afternoon.exists) {
             setShiftType("siang");
+          } else if (!morning.exists) {
+            setShiftType("pagi");
           }
         } catch (err) {
-          console.warn("Failed checking open shifts:", err);
+          console.warn("Failed checking today shifts:", err);
+          setTodayShiftsState((prev) => ({ ...prev, loading: false }));
         }
       })();
     }
@@ -550,6 +586,19 @@ function OpenShiftDialog({
       return;
     }
     if (!userId) { toast.error("Sesi tidak valid"); return; }
+
+    const isMorningBlocked = shiftType === "pagi" && todayShiftsState.morning.exists;
+    const isAfternoonBlocked = shiftType === "siang" && todayShiftsState.afternoon.exists;
+
+    if (isMorningBlocked) {
+      toast.error("Shif Pagi untuk cabang ini sudah pernah dibuka pada hari ini!");
+      return;
+    }
+
+    if (isAfternoonBlocked) {
+      toast.error("Shif Siang/Sore untuk cabang ini sudah pernah dibuka pada hari ini!");
+      return;
+    }
     
     const reqCapVal = Number(requestedCapital.replace(/[^\d]/g, "")) || 0;
     const baseCapVal =
@@ -674,6 +723,19 @@ function OpenShiftDialog({
               </Select>
             )}
           </div>
+          {/* Peringatan jika seluruh shif kerja hari ini sudah dibuka */}
+          {todayShiftsState.morning.exists && todayShiftsState.afternoon.exists && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2.5">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <div>
+                <p className="font-semibold">Semua Shif Hari Ini Sudah Selesai</p>
+                <p className="text-[11px] mt-0.5 leading-relaxed">
+                  Shif Pagi dan Shif Siang/Sore untuk cabang ini sudah pernah dibuka pada hari ini. Menurut SOP pembukuan KUPVA, shif yang sama tidak boleh dibuka lebih dari 1 kali dalam 1 hari.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>Jenis Shif</Label>
             <Select value={shiftType} onValueChange={(v) => setShiftType(v as ShiftType)}>
@@ -681,18 +743,22 @@ function OpenShiftDialog({
               <SelectContent>
                 <SelectItem 
                   value="pagi" 
-                  disabled={branchOpenShifts.morningOpen}
+                  disabled={todayShiftsState.morning.exists}
                 >
-                  {branchOpenShifts.morningOpen
-                    ? "Shif Pagi (08.00–15.00 WITA) — Sedang Terbuka"
+                  {todayShiftsState.morning.isOpen
+                    ? "Shif Pagi (08.00–15.00 WITA) — Sedang Aktif"
+                    : todayShiftsState.morning.isClosed
+                    ? "Shif Pagi (08.00–15.00 WITA) — Sudah Selesai Hari Ini"
                     : "Shif Pagi (08.00–15.00 WITA)"}
                 </SelectItem>
                 <SelectItem 
                   value="siang" 
-                  disabled={branchOpenShifts.afternoonOpen}
+                  disabled={todayShiftsState.afternoon.exists}
                 >
-                  {branchOpenShifts.afternoonOpen
-                    ? "Shif Siang/Sore (15.00–22.00 WITA) — Sedang Terbuka"
+                  {todayShiftsState.afternoon.isOpen
+                    ? "Shif Siang/Sore (15.00–22.00 WITA) — Sedang Aktif"
+                    : todayShiftsState.afternoon.isClosed
+                    ? "Shif Siang/Sore (15.00–22.00 WITA) — Sudah Selesai Hari Ini"
                     : "Shif Siang/Sore (15.00–22.00 WITA)"}
                 </SelectItem>
               </SelectContent>
@@ -852,7 +918,16 @@ function OpenShiftDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Batal</Button>
-          <Button onClick={submit} disabled={saving} className="gap-2">
+          <Button
+            onClick={submit}
+            disabled={
+              saving ||
+              (shiftType === "pagi"
+                ? todayShiftsState.morning.exists
+                : todayShiftsState.afternoon.exists)
+            }
+            className="gap-2"
+          >
             <Play className="h-4 w-4" />
             {saving ? "Menyimpan…" : "Buka Shif"}
           </Button>
