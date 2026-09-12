@@ -144,13 +144,9 @@ function ShiftsPage() {
       <MasterPageHeader
         title="Manajemen Shif Kasir"
         description="Buka dan tutup shif kerja kasir, serah terima modal, serta rekonsiliasi kas."
-        action={
-          !myOpenShift && (
-            <Button onClick={() => setOpenDialog(true)} className="gap-2">
-              <Play className="h-4 w-4" /> Buka Shif
-            </Button>
-          )
-        }
+        onAdd={!myOpenShift ? () => setOpenDialog(true) : undefined}
+        addLabel="Buka Shif"
+        canWrite={!myOpenShift}
       />
 
       {myOpenShift && (
