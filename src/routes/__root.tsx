@@ -103,10 +103,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "icon", href: "/favicon.png", type: "image/png" },
-      { rel: "shortcut icon", href: "/favicon.png", type: "image/png" },
+      { rel: "shortcut icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "alternate icon", href: "/favicon.ico", type: "image/x-icon" },
-      { rel: "apple-touch-icon", href: "/favicon.png" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -135,27 +136,14 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-function FaviconSync() {
+function BrandSync() {
   const { settings } = useAppSettings();
 
   useEffect(() => {
     if (settings.company_name) {
       document.title = settings.company_name;
     }
-    const iconUrl = settings.logo_url || "/favicon.png";
-    const existing = document.querySelectorAll<HTMLLinkElement>("link[rel*='icon']");
-    if (existing.length > 0) {
-      existing.forEach((el) => {
-        el.href = iconUrl;
-      });
-    } else {
-      const link = document.createElement("link");
-      link.rel = "icon";
-      link.type = "image/png";
-      link.href = iconUrl;
-      document.head.appendChild(link);
-    }
-  }, [settings.logo_url, settings.company_name]);
+  }, [settings.company_name]);
 
   return null;
 }
@@ -165,7 +153,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <FaviconSync />
+      <BrandSync />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster richColors position="top-right" expand={true} visibleToasts={6} gap={8} />
