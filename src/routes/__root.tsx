@@ -83,17 +83,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "KUPVA BB — Money Changer Information System" },
+      { title: "PT ARISTA MARTA VALUTA" },
       {
         name: "description",
         content:
-          "Sistem Informasi Money Changer KUPVA BB: KYC/CDD, transaksi valas, manajemen kas, dan pelaporan sesuai regulasi Bank Indonesia.",
+          "Sistem Informasi Money Changer PT ARISTA MARTA VALUTA: KYC/CDD, transaksi valas, manajemen kas, dan pelaporan sesuai regulasi Bank Indonesia.",
       },
-      { name: "author", content: "KUPVA BB" },
-      { property: "og:title", content: "KUPVA BB — Money Changer Information System" },
+      { name: "author", content: "PT ARISTA MARTA VALUTA" },
+      { property: "og:title", content: "PT ARISTA MARTA VALUTA" },
       {
         property: "og:description",
-        content: "Sistem informasi money changer terintegrasi untuk KUPVA BB berlisensi Bank Indonesia.",
+        content: "Sistem informasi money changer terintegrasi untuk PT ARISTA MARTA VALUTA berlisensi Bank Indonesia.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -139,6 +139,9 @@ function FaviconSync() {
   const { settings } = useAppSettings();
 
   useEffect(() => {
+    if (settings.company_name) {
+      document.title = settings.company_name;
+    }
     const iconUrl = settings.logo_url || "/favicon.png";
     const existing = document.querySelectorAll<HTMLLinkElement>("link[rel*='icon']");
     if (existing.length > 0) {
@@ -152,7 +155,7 @@ function FaviconSync() {
       link.href = iconUrl;
       document.head.appendChild(link);
     }
-  }, [settings.logo_url]);
+  }, [settings.logo_url, settings.company_name]);
 
   return null;
 }

@@ -28,7 +28,7 @@ export interface AppSettings {
 }
 
 const DEFAULT: AppSettings = {
-  company_name: "KUPVA BB",
+  company_name: "PT ARISTA MARTA VALUTA",
   company_address: "",
   company_phone: "",
   license_pva: "",
