@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getSavedTheme, applyTheme } from "@/lib/theme";
 
 export interface AppSettings {
   company_name: string;
@@ -25,6 +26,7 @@ export interface AppSettings {
   tx_prefix_company: string;
   tx_prefix_buy: string;
   tx_prefix_sell: string;
+  theme_color: string;
 }
 
 const DEFAULT: AppSettings = {
@@ -51,6 +53,7 @@ const DEFAULT: AppSettings = {
   tx_prefix_company: "AMV",
   tx_prefix_buy: "1",
   tx_prefix_sell: "2",
+  theme_color: "ocean",
 };
 
 let cache: AppSettings | null = null;
@@ -59,9 +62,7 @@ const listeners = new Set<(s: AppSettings) => void>();
 async function fetchSettings(): Promise<AppSettings> {
   const { data } = await (supabase
     .from("app_settings")
-    .select(
-      "company_name, company_address, company_phone, license_pva, npwp_number, shift_pagi_start, shift_pagi_end, shift_siang_start, shift_siang_end, prevent_oversell, transaction_threshold_usd, logo_url, threshold_individual_buy_enabled, threshold_individual_buy_usd, threshold_individual_sell_enabled, threshold_individual_sell_usd, threshold_corporate_buy_enabled, threshold_corporate_buy_usd, threshold_corporate_sell_enabled, threshold_corporate_sell_usd, tx_prefix_company, tx_prefix_buy, tx_prefix_sell" as any,
-    )
+    .select("*" as any)
     .eq("id", true)
     .maybeSingle() as any);
   const trim = (v: unknown) =>
@@ -73,6 +74,9 @@ async function fetchSettings(): Promise<AppSettings> {
   };
   const bool = (v: unknown, fallback: boolean) =>
     v === undefined || v === null ? fallback : !!v;
+
+  const savedTheme = getSavedTheme();
+  const themeColor = str((data as Record<string, unknown> | null)?.theme_color) || savedTheme || DEFAULT.theme_color;
 
   const next: AppSettings = {
     company_name: (data?.company_name as string) || DEFAULT.company_name,
@@ -99,8 +103,10 @@ async function fetchSettings(): Promise<AppSettings> {
     tx_prefix_company: str(data?.tx_prefix_company) || DEFAULT.tx_prefix_company,
     tx_prefix_buy: str(data?.tx_prefix_buy) || DEFAULT.tx_prefix_buy,
     tx_prefix_sell: str(data?.tx_prefix_sell) || DEFAULT.tx_prefix_sell,
+    theme_color: themeColor,
   };
   cache = next;
+  applyTheme(themeColor);
   listeners.forEach((l) => l(next));
   return next;
 }

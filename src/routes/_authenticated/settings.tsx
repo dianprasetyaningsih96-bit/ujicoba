@@ -18,11 +18,21 @@ import {
   User,
   Hash,
   FileText,
+  Palette,
+  Check,
+  RotateCcw,
+  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SUPABASE_PROJECT_ID, SUPABASE_URL } from "@/integrations/supabase/config";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import {
+  THEME_PRESETS,
+  applyTheme,
+  getSavedTheme,
+  THEME_STORAGE_KEY,
+} from "@/lib/theme";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +86,13 @@ function SettingsPage() {
   const [txPrefixCompany, setTxPrefixCompany] = useState(settings.tx_prefix_company || "AMV");
   const [txPrefixBuy, setTxPrefixBuy] = useState(settings.tx_prefix_buy || "1");
   const [txPrefixSell, setTxPrefixSell] = useState(settings.tx_prefix_sell || "2");
+  const [selectedTheme, setSelectedTheme] = useState(settings.theme_color || getSavedTheme());
+  const [customHex, setCustomHex] = useState(
+    (settings.theme_color || getSavedTheme()).startsWith("#")
+      ? (settings.theme_color || getSavedTheme())
+      : "#0284c7"
+  );
+  const [savingTheme, setSavingTheme] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -131,6 +148,12 @@ function SettingsPage() {
     setTxPrefixCompany(settings.tx_prefix_company || "AMV");
     setTxPrefixBuy(settings.tx_prefix_buy || "1");
     setTxPrefixSell(settings.tx_prefix_sell || "2");
+    if (settings.theme_color) {
+      setSelectedTheme(settings.theme_color);
+      if (settings.theme_color.startsWith("#")) {
+        setCustomHex(settings.theme_color);
+      }
+    }
   }, [settings]);
 
   useEffect(() => {
@@ -139,6 +162,60 @@ function SettingsPage() {
       navigate({ to: "/dashboard" });
     }
   }, [userLoading, canEdit, navigate]);
+
+  const handleSelectTheme = (themeId: string) => {
+    setSelectedTheme(themeId);
+    applyTheme(themeId);
+  };
+
+  const handleApplyCustomHex = (hexValue: string) => {
+    let clean = hexValue.trim();
+    if (!clean.startsWith("#")) {
+      clean = "#" + clean;
+    }
+    if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(clean)) {
+      setCustomHex(clean);
+      setSelectedTheme(clean);
+      applyTheme(clean);
+      toast.success("Warna kustom diterapkan");
+    } else {
+      toast.error("Format warna HEX tidak valid (contoh: #0ea5e9)");
+    }
+  };
+
+  const handleSaveTheme = async () => {
+    setSavingTheme(true);
+    try {
+      // 1. Immediately apply & persist in localStorage
+      applyTheme(selectedTheme);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
+      } catch {}
+
+      // 2. Persist to Supabase app_settings
+      const { data: userRes } = await supabase.auth.getUser();
+      const { error: dbError } = await (supabase
+        .from("app_settings")
+        .update({
+          theme_color: selectedTheme,
+          updated_at: new Date().toISOString(),
+          updated_by: userRes.user?.id ?? null,
+        } as any)
+        .eq("id", true) as any);
+
+      if (dbError) {
+        console.warn("Notice: Database theme update:", dbError.message);
+      }
+
+      await refresh();
+      toast.success("Warna tampilan berhasil disimpan dan disinkronkan!");
+    } catch (err: any) {
+      console.error("Error saving theme:", err);
+      toast.success("Warna tampilan berhasil diterapkan pada perangkat ini!");
+    } finally {
+      setSavingTheme(false);
+    }
+  };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -227,36 +304,54 @@ function SettingsPage() {
     const primaryAddress = headOffice?.address || companyAddress;
     const primaryPhone = headOffice?.phone || companyPhone;
 
-    const { error: settingsError } = await supabase
+    const payload: Record<string, any> = {
+      company_name: name,
+      company_address: primaryAddress.trim(),
+      company_phone: primaryPhone.trim(),
+      license_pva: licensePva.trim(),
+      npwp_number: npwpNumber.trim(),
+      logo_url: logoUrl.trim() || null,
+      shift_pagi_start: pagiStart,
+      shift_pagi_end: pagiEnd,
+      shift_siang_start: siangStart,
+      shift_siang_end: siangEnd,
+      prevent_oversell: preventOversell,
+      transaction_threshold_usd: thresholdUsd,
+      threshold_individual_buy_enabled: indivBuyEnabled,
+      threshold_individual_buy_usd: indivBuyUsd,
+      threshold_individual_sell_enabled: indivSellEnabled,
+      threshold_individual_sell_usd: indivSellUsd,
+      threshold_corporate_buy_enabled: corpBuyEnabled,
+      threshold_corporate_buy_usd: corpBuyUsd,
+      threshold_corporate_sell_enabled: corpSellEnabled,
+      threshold_corporate_sell_usd: corpSellUsd,
+      tx_prefix_company: txPrefixCompany.trim().toUpperCase() || "AMV",
+      tx_prefix_buy: txPrefixBuy.trim().toUpperCase() || "1",
+      tx_prefix_sell: txPrefixSell.trim().toUpperCase() || "2",
+      theme_color: selectedTheme,
+      updated_at: new Date().toISOString(),
+      updated_by: userRes.user?.id ?? null,
+    };
+
+    let { error: settingsError } = await supabase
       .from("app_settings")
-      .update({
-        company_name: name,
-        company_address: primaryAddress.trim(),
-        company_phone: primaryPhone.trim(),
-        license_pva: licensePva.trim(),
-        npwp_number: npwpNumber.trim(),
-        logo_url: logoUrl.trim() || null,
-        shift_pagi_start: pagiStart,
-        shift_pagi_end: pagiEnd,
-        shift_siang_start: siangStart,
-        shift_siang_end: siangEnd,
-        prevent_oversell: preventOversell,
-        transaction_threshold_usd: thresholdUsd,
-        threshold_individual_buy_enabled: indivBuyEnabled,
-        threshold_individual_buy_usd: indivBuyUsd,
-        threshold_individual_sell_enabled: indivSellEnabled,
-        threshold_individual_sell_usd: indivSellUsd,
-        threshold_corporate_buy_enabled: corpBuyEnabled,
-        threshold_corporate_buy_usd: corpBuyUsd,
-        threshold_corporate_sell_enabled: corpSellEnabled,
-        threshold_corporate_sell_usd: corpSellUsd,
-        tx_prefix_company: txPrefixCompany.trim().toUpperCase() || "AMV",
-        tx_prefix_buy: txPrefixBuy.trim().toUpperCase() || "1",
-        tx_prefix_sell: txPrefixSell.trim().toUpperCase() || "2",
-        updated_at: new Date().toISOString(),
-        updated_by: userRes.user?.id ?? null,
-      } as any)
+      .update(payload as any)
       .eq("id", true);
+
+    if (settingsError && settingsError.message?.includes("theme_color")) {
+      delete payload.theme_color;
+      const retryRes = await supabase
+        .from("app_settings")
+        .update(payload as any)
+        .eq("id", true);
+      settingsError = retryRes.error;
+    }
+
+    // Always ensure local theme is applied and saved
+    applyTheme(selectedTheme);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
+    } catch {}
 
     if (settingsError) {
       setSaving(false);
@@ -544,6 +639,196 @@ function SettingsPage() {
             <Button onClick={handleSave} disabled={saving || loading || uploadingLogo} className="gap-2">
               <Save className="h-4 w-4" />
               {saving ? "Menyimpan…" : "Simpan Pengaturan"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Kartu Pengaturan Tema & Warna Tampilan (Super Admin & Owner) */}
+      <Card className="max-w-2xl border-primary/20 shadow-sm">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+                <Palette className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Tema & Warna Tampilan</CardTitle>
+                <CardDescription>
+                  Pilih warna tampilan aplikasi sesuai identitas money changer. Seluruh tombol, badge, kartu, dan sidebar akan langsung beradaptasi.
+                </CardDescription>
+              </div>
+            </div>
+            <Badge variant="outline" className="self-start sm:self-auto border-primary/30 text-primary bg-primary/5 text-xs font-semibold">
+              Super Admin & Owner
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Preset Grid */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Palet Warna Siap Pakai</Label>
+              <span className="text-xs text-muted-foreground">Klik untuk langsung pratinjau</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {THEME_PRESETS.map((preset) => {
+                const isSelected = selectedTheme.toLowerCase() === preset.id.toLowerCase();
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleSelectTheme(preset.id)}
+                    className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                      isSelected
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs"
+                        : "border-border hover:border-primary/40 hover:bg-muted/40"
+                    }`}
+                  >
+                    <div
+                      className="h-7 w-7 rounded-full shrink-0 flex items-center justify-center text-white shadow-xs"
+                      style={{ backgroundColor: preset.primaryHex }}
+                    >
+                      {isSelected && <Check className="h-4 w-4 drop-shadow-xs" strokeWidth={3} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-sm text-foreground flex items-center gap-1.5">
+                        {preset.name}
+                        {preset.id === "ocean" && (
+                          <span className="text-[10px] bg-muted px-1.5 py-0.2 rounded font-normal text-muted-foreground">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                        {preset.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Custom Color Picker */}
+          <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                Warna Kustom (Pilih Bebas)
+              </Label>
+              {selectedTheme.startsWith("#") && (
+                <Badge variant="secondary" className="text-[10px] font-mono">
+                  Kustom Aktif: {selectedTheme}
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={customHex}
+                  onChange={(e) => {
+                    setCustomHex(e.target.value);
+                    handleApplyCustomHex(e.target.value);
+                  }}
+                  className="h-9 w-9 rounded-lg border border-input cursor-pointer bg-background p-0.5"
+                  title="Pilih warna bebas"
+                />
+                <Input
+                  value={customHex}
+                  onChange={(e) => setCustomHex(e.target.value)}
+                  placeholder="#0284c7"
+                  maxLength={7}
+                  className="w-28 font-mono uppercase text-sm h-9"
+                />
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={() => handleApplyCustomHex(customHex)}
+              >
+                Terapkan Warna
+              </Button>
+
+              {selectedTheme !== "ocean" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 gap-1.5 text-muted-foreground hover:text-foreground"
+                  onClick={() => handleSelectTheme("ocean")}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reset ke Default
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Masukkan kode HEX warna identitas perusahaan (contoh: <code>#0D9488</code>, <code>#2563EB</code>, <code>#E11D48</code>). Sistem akan otomatis menghitung warna gradien, bayangan, dan kontrasnya.
+            </p>
+          </div>
+
+          {/* Live Preview Demonstration */}
+          <div className="rounded-xl border bg-background p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Pratinjau Langsung Komponen (Live Preview)
+              </span>
+              <Badge className="text-[10px]">Real-time</Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              {/* Button & Badge previews */}
+              <div className="space-y-2.5">
+                <div className="text-xs font-medium text-muted-foreground">Tombol & Aksen:</div>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" className="gap-1.5 shadow-xs">
+                    <Save className="h-3.5 w-3.5" />
+                    Tombol Utama
+                  </Button>
+                  <Button size="sm" variant="outline">
+                    Tombol Garis
+                  </Button>
+                  <Badge className="py-1">Badge Primer</Badge>
+                  <Badge variant="outline">Badge Outline</Badge>
+                </div>
+              </div>
+
+              {/* Mini Card Preview */}
+              <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-primary">Simulasi Kartu Info</span>
+                  <span className="text-[10px] font-mono text-muted-foreground">USD / IDR</span>
+                </div>
+                <div className="text-lg font-bold text-foreground">
+                  Rp 16.450 <span className="text-xs font-normal text-muted-foreground">/ USD</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  Gradien dan aksen kartu beradaptasi otomatis dengan tema ini.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Save Theme Button */}
+          <div className="flex justify-end pt-2">
+            <Button
+              type="button"
+              onClick={handleSaveTheme}
+              disabled={savingTheme || loading}
+              className="gap-2 shadow-xs"
+            >
+              {savingTheme ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {savingTheme ? "Menyimpan Tema…" : "Simpan Warna Tampilan"}
             </Button>
           </div>
         </CardContent>

@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { getSavedTheme, applyTheme } from "@/lib/theme";
 
 function NotFoundComponent() {
   return (
@@ -138,6 +139,12 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function BrandSync() {
   const { settings } = useAppSettings();
+
+  useEffect(() => {
+    // Immediate apply from localStorage or settings
+    const themeToApply = settings.theme_color || getSavedTheme();
+    applyTheme(themeToApply);
+  }, [settings.theme_color]);
 
   useEffect(() => {
     if (settings.company_name) {
