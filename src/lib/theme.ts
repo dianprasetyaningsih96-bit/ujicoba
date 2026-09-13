@@ -215,8 +215,10 @@ export function generateCustomThemeVariables(hex: string): Record<string, string
 
 /**
  * Apply theme to document.documentElement
+ * @param themeKeyOrHex Preset ID (ocean, emerald, etc.) or custom HEX string
+ * @param persist If true, save to localStorage. Defaults to false so passive renders do not overwrite user preference.
  */
-export function applyTheme(themeKeyOrHex: string | null | undefined): void {
+export function applyTheme(themeKeyOrHex: string | null | undefined, persist: boolean = false): void {
   if (typeof document === "undefined") return;
 
   const key = (themeKeyOrHex || "ocean").trim();
@@ -228,10 +230,12 @@ export function applyTheme(themeKeyOrHex: string | null | undefined): void {
     Object.entries(preset.variables).forEach(([prop, val]) => {
       root.style.setProperty(prop, val);
     });
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, preset.id);
-    } catch {
-      // ignore
+    if (persist) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, preset.id);
+      } catch {
+        // ignore
+      }
     }
     return;
   }
@@ -242,10 +246,12 @@ export function applyTheme(themeKeyOrHex: string | null | undefined): void {
     Object.entries(vars).forEach(([prop, val]) => {
       root.style.setProperty(prop, val);
     });
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, key);
-    } catch {
-      // ignore
+    if (persist) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, key);
+      } catch {
+        // ignore
+      }
     }
     return;
   }
@@ -255,6 +261,20 @@ export function applyTheme(themeKeyOrHex: string | null | undefined): void {
   Object.entries(defaultPreset.variables).forEach(([prop, val]) => {
     root.style.setProperty(prop, val);
   });
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, "ocean");
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
+ * Save and apply theme explicitly to both DOM and localStorage
+ */
+export function saveTheme(themeKeyOrHex: string): void {
+  applyTheme(themeKeyOrHex, true);
 }
 
 /**
@@ -263,7 +283,8 @@ export function applyTheme(themeKeyOrHex: string | null | undefined): void {
 export function getSavedTheme(): string {
   if (typeof window === "undefined") return "ocean";
   try {
-    return localStorage.getItem(THEME_STORAGE_KEY) || "ocean";
+    const val = localStorage.getItem(THEME_STORAGE_KEY);
+    return val && val.trim() ? val.trim() : "ocean";
   } catch {
     return "ocean";
   }

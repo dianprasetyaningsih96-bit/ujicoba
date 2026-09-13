@@ -152,10 +152,11 @@ function SettingsPage() {
     setTxPrefixCompany(settings.tx_prefix_company || "AMV");
     setTxPrefixBuy(settings.tx_prefix_buy || "1");
     setTxPrefixSell(settings.tx_prefix_sell || "2");
-    if (settings.theme_color) {
-      setSelectedTheme(settings.theme_color);
-      if (settings.theme_color.startsWith("#")) {
-        setCustomHex(settings.theme_color);
+    const effectiveTheme = settings.theme_color || getSavedTheme();
+    if (effectiveTheme) {
+      setSelectedTheme(effectiveTheme);
+      if (effectiveTheme.startsWith("#")) {
+        setCustomHex(effectiveTheme);
       }
     }
   }, [settings]);
@@ -169,7 +170,7 @@ function SettingsPage() {
 
   const handleSelectTheme = (themeId: string) => {
     setSelectedTheme(themeId);
-    applyTheme(themeId);
+    applyTheme(themeId, true);
   };
 
   const handleApplyCustomHex = (hexValue: string) => {
@@ -180,7 +181,7 @@ function SettingsPage() {
     if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(clean)) {
       setCustomHex(clean);
       setSelectedTheme(clean);
-      applyTheme(clean);
+      applyTheme(clean, true);
       toast.success("Warna kustom diterapkan");
     } else {
       toast.error("Format warna HEX tidak valid (contoh: #0ea5e9)");
@@ -191,7 +192,7 @@ function SettingsPage() {
     setSavingTheme(true);
     try {
       // 1. Immediately apply & persist in localStorage
-      applyTheme(selectedTheme);
+      applyTheme(selectedTheme, true);
       try {
         localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
       } catch {}
@@ -209,13 +210,18 @@ function SettingsPage() {
 
       if (dbError) {
         console.warn("Notice: Database theme update:", dbError.message);
+        toast.success(
+          "Warna tema tersimpan aman di browser! Agar sinkron ke seluruh komputer cabang, jalankan skrip SQL di Supabase SQL Editor.",
+          { duration: 6000 }
+        );
+      } else {
+        toast.success("Warna tampilan berhasil disimpan dan disinkronkan ke seluruh sistem!");
       }
 
       await refresh();
-      toast.success("Warna tampilan berhasil disimpan dan disinkronkan!");
     } catch (err: any) {
       console.error("Error saving theme:", err);
-      toast.success("Warna tampilan berhasil diterapkan pada perangkat ini!");
+      toast.success("Warna tampilan berhasil disimpan di browser ini!");
     } finally {
       setSavingTheme(false);
     }

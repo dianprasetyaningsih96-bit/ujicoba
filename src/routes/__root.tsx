@@ -128,6 +128,29 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
+              try {
+                var t = (localStorage.getItem('valuta_app_theme') || 'ocean').trim();
+                var presets = {
+                  ocean: {"--primary":"oklch(0.58 0.09 215)","--primary-foreground":"oklch(0.99 0.008 235)","--primary-deep":"oklch(0.24 0.07 250)","--primary-glow":"oklch(0.78 0.08 195)","--ring":"oklch(0.58 0.09 215)","--sidebar":"oklch(0.24 0.07 250)","--sidebar-primary":"oklch(0.75 0.08 195)","--sidebar-accent":"oklch(0.36 0.08 245)","--sidebar-border":"oklch(0.36 0.08 245)"},
+                  emerald: {"--primary":"oklch(0.58 0.15 155)","--primary-foreground":"oklch(0.99 0.01 155)","--primary-deep":"oklch(0.22 0.07 165)","--primary-glow":"oklch(0.78 0.12 150)","--ring":"oklch(0.58 0.15 155)","--sidebar":"oklch(0.20 0.06 165)","--sidebar-primary":"oklch(0.75 0.14 150)","--sidebar-accent":"oklch(0.30 0.08 160)","--sidebar-border":"oklch(0.30 0.08 160)"},
+                  indigo: {"--primary":"oklch(0.55 0.18 275)","--primary-foreground":"oklch(0.99 0.01 275)","--primary-deep":"oklch(0.22 0.08 280)","--primary-glow":"oklch(0.76 0.14 270)","--ring":"oklch(0.55 0.18 275)","--sidebar":"oklch(0.20 0.07 280)","--sidebar-primary":"oklch(0.76 0.14 270)","--sidebar-accent":"oklch(0.32 0.08 275)","--sidebar-border":"oklch(0.32 0.08 275)"},
+                  amber: {"--primary":"oklch(0.66 0.17 65)","--primary-foreground":"oklch(0.99 0.01 65)","--primary-deep":"oklch(0.24 0.06 50)","--primary-glow":"oklch(0.82 0.15 75)","--ring":"oklch(0.66 0.17 65)","--sidebar":"oklch(0.20 0.04 50)","--sidebar-primary":"oklch(0.80 0.16 70)","--sidebar-accent":"oklch(0.32 0.06 60)","--sidebar-border":"oklch(0.32 0.06 60)"},
+                  crimson: {"--primary":"oklch(0.55 0.20 25)","--primary-foreground":"oklch(0.99 0.01 25)","--primary-deep":"oklch(0.22 0.07 20)","--primary-glow":"oklch(0.74 0.17 28)","--ring":"oklch(0.55 0.20 25)","--sidebar":"oklch(0.20 0.04 20)","--sidebar-primary":"oklch(0.74 0.17 28)","--sidebar-accent":"oklch(0.30 0.06 25)","--sidebar-border":"oklch(0.30 0.06 25)"},
+                  teal: {"--primary":"oklch(0.60 0.14 190)","--primary-foreground":"oklch(0.99 0.01 190)","--primary-deep":"oklch(0.22 0.07 200)","--primary-glow":"oklch(0.78 0.10 185)","--ring":"oklch(0.60 0.14 190)","--sidebar":"oklch(0.20 0.05 205)","--sidebar-primary":"oklch(0.75 0.11 185)","--sidebar-accent":"oklch(0.30 0.07 195)","--sidebar-border":"oklch(0.30 0.07 195)"},
+                  slate: {"--primary":"oklch(0.48 0.04 250)","--primary-foreground":"oklch(0.99 0.01 250)","--primary-deep":"oklch(0.20 0.02 250)","--primary-glow":"oklch(0.72 0.03 250)","--ring":"oklch(0.48 0.04 250)","--sidebar":"oklch(0.18 0.02 250)","--sidebar-primary":"oklch(0.72 0.03 250)","--sidebar-accent":"oklch(0.28 0.02 250)","--sidebar-border":"oklch(0.28 0.02 250)"}
+                };
+                var root = document.documentElement;
+                if (presets[t]) {
+                  var v = presets[t];
+                  for (var k in v) { root.style.setProperty(k, v[k]); }
+                }
+              } catch(e) {}
+            })()`
+          }}
+        />
       </head>
       <body>
         {children}
@@ -141,9 +164,9 @@ function BrandSync() {
   const { settings } = useAppSettings();
 
   useEffect(() => {
-    // Immediate apply from localStorage or settings
+    // Apply saved theme safely without forcefully overriding localStorage
     const themeToApply = settings.theme_color || getSavedTheme();
-    applyTheme(themeToApply);
+    applyTheme(themeToApply, false);
   }, [settings.theme_color]);
 
   useEffect(() => {

@@ -53,7 +53,7 @@ const DEFAULT: AppSettings = {
   tx_prefix_company: "AMV",
   tx_prefix_buy: "1",
   tx_prefix_sell: "2",
-  theme_color: "ocean",
+  theme_color: typeof window !== "undefined" ? getSavedTheme() : "ocean",
 };
 
 let cache: AppSettings | null = null;
@@ -75,8 +75,10 @@ async function fetchSettings(): Promise<AppSettings> {
   const bool = (v: unknown, fallback: boolean) =>
     v === undefined || v === null ? fallback : !!v;
 
+  const dbTheme = str((data as Record<string, unknown> | null)?.theme_color);
   const savedTheme = getSavedTheme();
-  const themeColor = str((data as Record<string, unknown> | null)?.theme_color) || savedTheme || DEFAULT.theme_color;
+  // Database theme takes priority if present, otherwise fallback to local saved theme
+  const themeColor = dbTheme || savedTheme || "ocean";
 
   const next: AppSettings = {
     company_name: (data?.company_name as string) || DEFAULT.company_name,
@@ -106,7 +108,8 @@ async function fetchSettings(): Promise<AppSettings> {
     theme_color: themeColor,
   };
   cache = next;
-  applyTheme(themeColor);
+  // If db has a theme, persist to local storage; otherwise apply without overwriting local storage
+  applyTheme(themeColor, !!dbTheme);
   listeners.forEach((l) => l(next));
   return next;
 }
