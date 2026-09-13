@@ -433,7 +433,7 @@ function SettingsPage() {
         </TabsList>
 
         <TabsContent value="identitas" className="space-y-6 focus-visible:outline-none">
-          <Card className="max-w-2xl">
+          <Card className="w-full">
         <CardHeader>
           <CardTitle>Identitas Money Changer</CardTitle>
           <CardDescription>
@@ -684,7 +684,7 @@ function SettingsPage() {
 
     <TabsContent value="tema" className="space-y-6 focus-visible:outline-none">
       {/* Kartu Pengaturan Tema & Warna Tampilan (Super Admin & Owner) */}
-      <Card className="max-w-2xl border-primary/20 shadow-sm">
+      <Card className="w-full border-primary/20 shadow-sm">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex items-center gap-2.5">
@@ -710,7 +710,7 @@ function SettingsPage() {
               <Label className="text-sm font-semibold">Palet Warna Siap Pakai</Label>
               <span className="text-xs text-muted-foreground">Klik untuk langsung pratinjau</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
               {THEME_PRESETS.map((preset) => {
                 const isSelected = selectedTheme.toLowerCase() === preset.id.toLowerCase();
                 return (
@@ -875,7 +875,7 @@ function SettingsPage() {
     </TabsContent>
 
     <TabsContent value="shif" className="space-y-6 focus-visible:outline-none">
-      <Card className="max-w-2xl">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>Jam Shif Operasional (WITA)</CardTitle>
           <CardDescription>
@@ -933,7 +933,7 @@ function SettingsPage() {
     </TabsContent>
 
     <TabsContent value="transaksi" className="space-y-6 focus-visible:outline-none">
-      <Card className="max-w-2xl">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-destructive">
             <ShieldAlert className="h-5 w-5" />
@@ -1166,7 +1166,7 @@ function SettingsPage() {
       </Card>
 
       {hasAnyRole(roles, ["super_admin", "owner"]) && (
-        <Card className="max-w-2xl">
+        <Card className="w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Hash className="h-5 w-5 text-primary" />
@@ -1374,7 +1374,7 @@ function ConnectionCard() {
   }
 
   return (
-    <Card className="max-w-2xl border-primary/20 bg-primary/5">
+    <Card className="w-full border-primary/20 bg-primary/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <PlugZap className="h-5 w-5 text-primary" />
