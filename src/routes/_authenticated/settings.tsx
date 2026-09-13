@@ -22,6 +22,8 @@ import {
   Check,
   RotateCcw,
   Sparkles,
+  Clock,
+  Coins,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SUPABASE_PROJECT_ID, SUPABASE_URL } from "@/integrations/supabase/config";
@@ -39,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -93,6 +96,7 @@ function SettingsPage() {
       : "#0284c7"
   );
   const [savingTheme, setSavingTheme] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("identitas");
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -396,7 +400,34 @@ function SettingsPage() {
         </div>
       </div>
 
-      <Card className="max-w-2xl">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="h-auto p-1.5 bg-muted/80 border border-border/60 flex flex-wrap gap-1 rounded-xl shadow-xs">
+          <TabsTrigger value="identitas" className="gap-2 py-2 px-3.5 text-xs sm:text-sm font-medium">
+            <Building2 className="h-4 w-4 text-primary" />
+            <span>Identitas & Cabang</span>
+          </TabsTrigger>
+          <TabsTrigger value="tema" className="gap-2 py-2 px-3.5 text-xs sm:text-sm font-medium">
+            <Palette className="h-4 w-4 text-primary" />
+            <span>Tema & Warna</span>
+          </TabsTrigger>
+          <TabsTrigger value="shif" className="gap-2 py-2 px-3.5 text-xs sm:text-sm font-medium">
+            <Clock className="h-4 w-4 text-primary" />
+            <span>Jam Shif Kerja</span>
+          </TabsTrigger>
+          <TabsTrigger value="transaksi" className="gap-2 py-2 px-3.5 text-xs sm:text-sm font-medium">
+            <Coins className="h-4 w-4 text-primary" />
+            <span>Transaksi & Format</span>
+          </TabsTrigger>
+          {hasAnyRole(roles, ["super_admin"]) && (
+            <TabsTrigger value="database" className="gap-2 py-2 px-3.5 text-xs sm:text-sm font-medium">
+              <PlugZap className="h-4 w-4 text-primary" />
+              <span>Database & Koneksi</span>
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="identitas" className="space-y-6 focus-visible:outline-none">
+          <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>Identitas Money Changer</CardTitle>
           <CardDescription>
@@ -643,7 +674,9 @@ function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+    </TabsContent>
 
+    <TabsContent value="tema" className="space-y-6 focus-visible:outline-none">
       {/* Kartu Pengaturan Tema & Warna Tampilan (Super Admin & Owner) */}
       <Card className="max-w-2xl border-primary/20 shadow-sm">
         <CardHeader>
@@ -833,7 +866,9 @@ function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+    </TabsContent>
 
+    <TabsContent value="shif" className="space-y-6 focus-visible:outline-none">
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>Jam Shif Operasional (WITA)</CardTitle>
@@ -889,7 +924,9 @@ function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+    </TabsContent>
 
+    <TabsContent value="transaksi" className="space-y-6 focus-visible:outline-none">
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-destructive">
@@ -1257,9 +1294,15 @@ function SettingsPage() {
           </CardContent>
         </Card>
       )}
+    </TabsContent>
 
-      {hasAnyRole(roles, ["super_admin"]) && <ConnectionCard />}
-    </div>
+    {hasAnyRole(roles, ["super_admin"]) && (
+      <TabsContent value="database" className="space-y-6 focus-visible:outline-none">
+        <ConnectionCard />
+      </TabsContent>
+    )}
+  </Tabs>
+</div>
   );
 }
 function ConnectionCard() {
