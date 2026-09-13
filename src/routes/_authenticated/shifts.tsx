@@ -1,12 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Clock, LogIn, LogOut, Play, Square, Pencil, AlertTriangle } from "lucide-react";
+import {
+  Clock,
+  LogIn,
+  LogOut,
+  Play,
+  Square,
+  Pencil,
+  AlertTriangle,
+  Search,
+  Calendar,
+  Building2,
+  RotateCcw,
+  Filter,
+  Loader2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, hasAnyRole } from "@/hooks/use-current-user";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { MasterPageHeader } from "@/components/master-data/page-header";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +43,7 @@ export const Route = createFileRoute("/_authenticated/shifts")({
 
 type ShiftType = "pagi" | "siang";
 type ShiftStatus = "open" | "closed";
+type DateFilterMode = "all" | "today" | "yesterday" | "this_month" | "custom_date" | "custom_range";
 
 interface ShiftRow {
   id: string;
@@ -66,16 +82,61 @@ function formatDateTime(s: string | null) {
   return new Date(s).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 }
 
+function toLocalDateStr(d: Date | string): string {
+  const dateObj = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return "";
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDayRangeISO(dateStr: string) {
+  const parts = dateStr.split("-").map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return { startISO: "", endISO: "" };
+  const [y, m, d] = parts;
+  const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+  return {
+    startISO: start.toISOString(),
+    endISO: end.toISOString(),
+  };
+}
+
+function getMonthRangeISO(ymStr: string) {
+  const parts = ymStr.split("-").map(Number);
+  if (parts.length < 2 || parts.some(isNaN)) return { startISO: "", endISO: "" };
+  const [y, m] = parts;
+  const start = new Date(y, m - 1, 1, 0, 0, 0, 0);
+  const end = new Date(y, m, 0, 23, 59, 59, 999);
+  return {
+    startISO: start.toISOString(),
+    endISO: end.toISOString(),
+  };
+}
+
 function ShiftsPage() {
   const { user, profile, roles } = useCurrentUser();
   const { settings } = useAppSettings();
-  const isManager = hasAnyRole(roles, ["super_admin", "branch_manager", "owner"]);
+  const isSuperAdmin = hasAnyRole(roles, ["super_admin", "owner"]);
+  const isManager = isSuperAdmin || hasAnyRole(roles, ["branch_manager"]);
+  const canSelectBranch = isSuperAdmin || hasAnyRole(roles, ["branch_manager"]);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
   const [myOpenShift, setMyOpenShift] = useState<ShiftRow | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Filter States
+  const defaultBranch = isSuperAdmin ? "all" : (profile?.branch_id ?? "all");
+  const [filterBranch, setFilterBranch] = useState<string>(defaultBranch);
+  const [dateMode, setDateMode] = useState<DateFilterMode>("all");
+  const [customDate, setCustomDate] = useState<string>("");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
 
   const [openDialog, setOpenDialog] = useState(false);
   const [closeDialog, setCloseDialog] = useState<ShiftRow | null>(null);
@@ -85,32 +146,73 @@ function ShiftsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const paginatedShifts = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return shifts.slice(start, start + pageSize);
-  }, [shifts, currentPage, pageSize]);
-
-  const load = useCallback(async () => {
+  const load = useCallback(async (
+    targetBranch = filterBranch,
+    targetDateMode = dateMode,
+    targetCustomDate = customDate,
+    targetStart = startDate,
+    targetEnd = endDate
+  ) => {
     setLoading(true);
-    const [b, c, s] = await Promise.all([
+    const [b, c, s, mineRes] = await Promise.all([
       supabase.from("branches").select("id, name, code").eq("is_active", true).order("name"),
       supabase.from("currencies").select("id, code, name, decimals").eq("is_active", true).order("code"),
       (() => {
         let query = supabase
           .from("shifts")
           .select("id, branch_id, user_id, shift_type, status, opening_capital, opened_at, closed_at, notes, branch:branches(name)")
-          .order("opened_at", { ascending: false })
-          .limit(100);
+          .order("opened_at", { ascending: false });
         
-        // Filter by branch if not super_admin
-        const isSuperAdmin = roles.includes("super_admin");
+        // Filter by branch
         if (!isSuperAdmin && profile?.branch_id) {
           query = query.eq("branch_id", profile.branch_id);
+        } else if (targetBranch && targetBranch !== "all") {
+          query = query.eq("branch_id", targetBranch);
+        }
+
+        // Filter by date
+        if (targetDateMode === "today") {
+          const todayStr = toLocalDateStr(new Date());
+          const { startISO, endISO } = getDayRangeISO(todayStr);
+          if (startISO && endISO) query = query.gte("opened_at", startISO).lte("opened_at", endISO);
+        } else if (targetDateMode === "yesterday") {
+          const d = new Date();
+          d.setDate(d.getDate() - 1);
+          const yestStr = toLocalDateStr(d);
+          const { startISO, endISO } = getDayRangeISO(yestStr);
+          if (startISO && endISO) query = query.gte("opened_at", startISO).lte("opened_at", endISO);
+        } else if (targetDateMode === "this_month") {
+          const ym = toLocalDateStr(new Date()).slice(0, 7);
+          const { startISO, endISO } = getMonthRangeISO(ym);
+          if (startISO && endISO) query = query.gte("opened_at", startISO).lte("opened_at", endISO);
+        } else if (targetDateMode === "custom_date" && targetCustomDate) {
+          const { startISO, endISO } = getDayRangeISO(targetCustomDate);
+          if (startISO && endISO) query = query.gte("opened_at", startISO).lte("opened_at", endISO);
+        } else if (targetDateMode === "custom_range") {
+          if (targetStart) {
+            const { startISO } = getDayRangeISO(targetStart);
+            if (startISO) query = query.gte("opened_at", startISO);
+          }
+          if (targetEnd) {
+            const { endISO } = getDayRangeISO(targetEnd);
+            if (endISO) query = query.lte("opened_at", endISO);
+          }
         }
         
-        return query;
+        return query.limit(500);
       })(),
+      user?.id
+        ? supabase
+            .from("shifts")
+            .select("id, branch_id, user_id, shift_type, status, opening_capital, opened_at, closed_at, notes, branch:branches(name)")
+            .eq("user_id", user.id)
+            .eq("status", "open")
+            .order("opened_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
+
     if (s.error) {
       toast.error("Gagal memuat shif: " + s.error.message);
     }
@@ -130,14 +232,81 @@ function ShiftsPage() {
       rows = rows.map((r) => ({ ...r, user: map.get(r.user_id) ?? null }));
     }
     setShifts(rows);
-    const mine = rows.find((r) => r.user_id === user?.id && r.status === "open");
-    setMyOpenShift(mine ?? null);
+    setMyOpenShift((mineRes?.data as ShiftRow | null) ?? null);
     setLoading(false);
-  }, [user?.id, roles, profile?.branch_id]);
+  }, [user?.id, isSuperAdmin, profile?.branch_id, filterBranch, dateMode, customDate, startDate, endDate]);
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, []);
+
+  // Filtered shifts according to search and status
+  const filteredShifts = useMemo(() => {
+    return shifts.filter((s) => {
+      if (filterStatus !== "all" && s.status !== filterStatus) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const userName = (s.user?.full_name || "").toLowerCase();
+        const userEmail = (s.user?.email || "").toLowerCase();
+        const branchName = (s.branch?.name || "").toLowerCase();
+        const notes = (s.notes || "").toLowerCase();
+        const matches =
+          userName.includes(q) ||
+          userEmail.includes(q) ||
+          branchName.includes(q) ||
+          notes.includes(q);
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [shifts, filterStatus, searchQuery]);
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStatus, filterBranch, dateMode, customDate, startDate, endDate]);
+
+  const paginatedShifts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredShifts.slice(start, start + pageSize);
+  }, [filteredShifts, currentPage, pageSize]);
+
+  const isFiltered =
+    (canSelectBranch && filterBranch !== defaultBranch) ||
+    dateMode !== "all" ||
+    searchQuery.trim() !== "" ||
+    filterStatus !== "all";
+
+  const handleResetFilter = () => {
+    setFilterBranch(defaultBranch);
+    setDateMode("all");
+    setCustomDate("");
+    setStartDate("");
+    setEndDate("");
+    setSearchQuery("");
+    setFilterStatus("all");
+    load(defaultBranch, "all", "", "", "");
+  };
+
+  const statDateLabel = useMemo(() => {
+    switch (dateMode) {
+      case "today":
+        return "Hari Ini";
+      case "yesterday":
+        return "Kemarin";
+      case "this_month":
+        return "Bulan Ini";
+      case "custom_date":
+        return customDate ? customDate.split("-").reverse().join("/") : "Tanggal Terpilih";
+      case "custom_range":
+        return `${startDate ? startDate.split("-").reverse().join("/") : "…"} s/d ${endDate ? endDate.split("-").reverse().join("/") : "…"}`;
+      case "all":
+      default:
+        return "Semua Tanggal";
+    }
+  }, [dateMode, customDate, startDate, endDate]);
 
   return (
     <div className="space-y-6">
@@ -177,14 +346,168 @@ function ShiftsPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Riwayat Shif</CardTitle>
-          <CardDescription>
-            {roles.includes("super_admin") 
-              ? "100 shif terakhir dari seluruh cabang" 
-              : "100 shif terakhir dari cabang Anda"}
-          </CardDescription>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Riwayat Shif</CardTitle>
+              <CardDescription>
+                {filteredShifts.length} shif ditemukan
+                {filterBranch !== "all" ? ` · Cabang: ${branches.find(b => b.id === filterBranch)?.name || "Terpilih"}` : ""}
+                {dateMode !== "all" ? ` · Periode: ${statDateLabel}` : ""}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="text-xs font-normal">
+                Total: <span className="font-semibold ml-1">{filteredShifts.length}</span>
+              </Badge>
+              <Badge className="bg-emerald-600/15 text-emerald-700 hover:bg-emerald-600/20 border-emerald-600/30 text-xs font-normal">
+                Terbuka: <span className="font-semibold ml-1">{filteredShifts.filter(s => s.status === "open").length}</span>
+              </Badge>
+              <Badge variant="secondary" className="text-xs font-normal">
+                Tertutup: <span className="font-semibold ml-1">{filteredShifts.filter(s => s.status === "closed").length}</span>
+              </Badge>
+            </div>
+          </div>
         </CardHeader>
+
+        {/* Toolbar Filter: Cabang, Tanggal, Pencarian, Status */}
+        <div className="px-6 py-3 border-b bg-muted/20 flex flex-wrap items-center gap-3">
+          {/* Pencarian teks (Nama Petugas, Catatan) */}
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Cari kasir / petugas, catatan…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+
+          {/* Filter Cabang */}
+          {canSelectBranch ? (
+            <Select
+              value={filterBranch}
+              onValueChange={(v) => {
+                setFilterBranch(v);
+                load(v, dateMode, customDate, startDate, endDate);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-48 h-9 text-sm">
+                <Building2 className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
+                <SelectValue placeholder="Semua Cabang" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Cabang</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : profile?.branch_id ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border bg-muted/40 text-xs text-muted-foreground h-9">
+              <Building2 className="h-3.5 w-3.5 text-primary" />
+              <span>Cabang: <b className="text-foreground">{branches.find(b => b.id === profile.branch_id)?.name || "Cabang Anda"}</b></span>
+            </div>
+          ) : null}
+
+          {/* Filter Tanggal Mode */}
+          <Select
+            value={dateMode}
+            onValueChange={(v: DateFilterMode) => {
+              setDateMode(v);
+              if (v === "all" || v === "today" || v === "yesterday" || v === "this_month") {
+                load(filterBranch, v, customDate, startDate, endDate);
+              }
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-44 h-9 text-sm">
+              <Calendar className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Tanggal</SelectItem>
+              <SelectItem value="today">Hari Ini</SelectItem>
+              <SelectItem value="yesterday">Kemarin</SelectItem>
+              <SelectItem value="this_month">Bulan Ini</SelectItem>
+              <SelectItem value="custom_date">Pilih Tanggal</SelectItem>
+              <SelectItem value="custom_range">Rentang Tanggal</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Input Tanggal Tunggal (Pilih Tanggal) */}
+          {dateMode === "custom_date" && (
+            <div className="flex items-center gap-1.5">
+              <DatePickerInput
+                value={customDate}
+                placeholder="DD/MM/YYYY"
+                onChange={(val) => {
+                  setCustomDate(val);
+                  load(filterBranch, "custom_date", val, startDate, endDate);
+                }}
+                className="w-full sm:w-36 h-9 text-sm"
+              />
+            </div>
+          )}
+
+          {/* Input Rentang Tanggal (Dari s/d Sampai) */}
+          {dateMode === "custom_range" && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <DatePickerInput
+                value={startDate}
+                placeholder="Dari DD/MM/YYYY"
+                onChange={(val) => {
+                  setStartDate(val);
+                  load(filterBranch, "custom_range", customDate, val, endDate);
+                }}
+                className="w-full sm:w-36 h-9 text-sm"
+              />
+              <span className="text-xs text-muted-foreground">s/d</span>
+              <DatePickerInput
+                value={endDate}
+                placeholder="Sampai DD/MM/YYYY"
+                onChange={(val) => {
+                  setEndDate(val);
+                  load(filterBranch, "custom_range", customDate, startDate, val);
+                }}
+                className="w-full sm:w-36 h-9 text-sm"
+              />
+            </div>
+          )}
+
+          {/* Filter Status Shif */}
+          <Select
+            value={filterStatus}
+            onValueChange={(v) => setFilterStatus(v)}
+          >
+            <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
+              <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Status</SelectItem>
+              <SelectItem value="open">Shif Terbuka</SelectItem>
+              <SelectItem value="closed">Shif Tertutup</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Tombol Reset Filter */}
+          {isFiltered && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFilter}
+              className="h-9 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+              title="Reset semua filter ke pengaturan awal"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset Filter
+            </Button>
+          )}
+        </div>
+
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -201,7 +524,38 @@ function ShiftsPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Memuat…</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span>Memuat data shif…</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : paginatedShifts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                    <div className="flex flex-col items-center justify-center gap-2 max-w-sm mx-auto">
+                      <Clock className="h-8 w-8 text-muted-foreground/40" />
+                      <p className="font-semibold text-foreground text-sm">Tidak ada data shif yang ditemukan</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {isFiltered
+                          ? "Tidak ada rekaman shif yang cocok dengan kriteria filter cabang atau tanggal yang Anda pilih."
+                          : "Belum ada riwayat shif kasir yang tercatat dalam sistem."}
+                      </p>
+                      {isFiltered && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleResetFilter}
+                          className="mt-2 h-8 text-xs gap-1.5"
+                        >
+                          <RotateCcw className="h-3 w-3" /> Reset Filter
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : (
                 paginatedShifts.map((s) => (
                   <TableRow key={s.id}>
@@ -257,11 +611,11 @@ function ShiftsPage() {
             </TableBody>
           </Table>
 
-          {shifts.length > 0 && (
+          {filteredShifts.length > 0 && (
             <DataTablePagination
               currentPage={currentPage}
               pageSize={pageSize}
-              totalRecords={shifts.length}
+              totalRecords={filteredShifts.length}
               onPageChange={setCurrentPage}
               onPageSizeChange={(sz) => {
                 setPageSize(sz);
