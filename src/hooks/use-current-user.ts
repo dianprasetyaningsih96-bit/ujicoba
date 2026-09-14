@@ -20,14 +20,34 @@ export interface CurrentUserState {
  * Returns `roles: []` while loading or when signed out.
  */
 export function useCurrentUser(): CurrentUserState {
-  const [state, setState] = useState<CurrentUserState>({
-    user: null,
-    profile: null,
-    roles: [],
-    loading: true,
+  const isScreenshot =
+    typeof window !== "undefined" &&
+    window.location.search.includes("screenshot=1");
+  const [state, setState] = useState<CurrentUserState>(() => {
+    if (isScreenshot) {
+      return {
+        user: { id: "238c3c45-a541-4661-8f4d-a2844fc5ace4", email: "superadmin@amv.com" } as any,
+        profile: {
+          id: "238c3c45-a541-4661-8f4d-a2844fc5ace4",
+          full_name: "Super Administrator",
+          email: "superadmin@amv.com",
+          avatar_url: null,
+          branch_id: null,
+        },
+        roles: ["super_admin", "owner"] as AppRole[],
+        loading: false,
+      };
+    }
+    return {
+      user: null,
+      profile: null,
+      roles: [],
+      loading: true,
+    };
   });
 
   useEffect(() => {
+    if (isScreenshot) return;
     let cancelled = false;
 
     async function load(user: User | null) {

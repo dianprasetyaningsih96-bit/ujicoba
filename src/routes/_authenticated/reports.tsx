@@ -64,6 +64,14 @@ interface TrxRow {
   currencies?: { code: string } | null;
   customers?: { customer_code: string; full_name: string; id_number: string } | null;
   branches?: { code: string; name: string } | null;
+  transaction_items?: Array<{
+    id: string;
+    currency_id: string;
+    foreign_amount: number;
+    rate: number;
+    idr_amount: number;
+    currencies?: { code: string; name?: string } | null;
+  }> | null;
 }
 
 interface Branch {
@@ -139,22 +147,35 @@ function exportExcel(filename: string, rows: TrxRow[]) {
     toast.info("Tidak ada data untuk diunduh");
     return;
   }
-  const data = rows.map((r) => ({
-    "No. Transaksi": r.transaction_no,
-    "Tanggal": new Date(r.transaction_date).toLocaleString("id-ID"),
-    "Jenis": r.transaction_type === "buy" ? "Beli" : "Jual",
-    "Cabang": r.branches?.name || r.branches?.code || "-",
-    "Nasabah": r.customers?.full_name ?? "WALK-IN",
-    "No. Identitas": r.customers?.id_number ?? "-",
-    "Mata Uang": r.currencies?.code ?? "-",
-    "Kurs": Number(r.rate),
-    "Nominal Valas": Number(r.foreign_amount),
-    "Nominal IDR": Number(r.idr_amount),
-    "Metode": (r.payment_method ?? "cash").toUpperCase(),
-    "Status": r.status,
-    "Mencurigakan": r.is_suspicious ? "Ya" : "Tidak",
-    "Alasan LTKM": r.suspicious_reason ?? "-",
-  }));
+  const data = rows.map((r) => {
+    const isMulti = r.transaction_items && r.transaction_items.length > 1;
+    const currencyStr = isMulti
+      ? r.transaction_items!.map((it) => it.currencies?.code || "-").join(", ")
+      : (r.currencies?.code ?? "-");
+    const rateStr = isMulti
+      ? r.transaction_items!.map((it) => `${it.currencies?.code || ""}: ${Number(it.rate)}`).join(" | ")
+      : Number(r.rate);
+    const foreignStr = isMulti
+      ? r.transaction_items!.map((it) => `${it.currencies?.code || ""}: ${Number(it.foreign_amount)}`).join(" | ")
+      : Number(r.foreign_amount);
+
+    return {
+      "No. Transaksi": r.transaction_no,
+      "Tanggal": new Date(r.transaction_date).toLocaleString("id-ID"),
+      "Jenis": r.transaction_type === "buy" ? "Beli" : "Jual",
+      "Cabang": r.branches?.name || r.branches?.code || "-",
+      "Nasabah": r.customers?.full_name ?? "WALK-IN",
+      "No. Identitas": r.customers?.id_number ?? "-",
+      "Mata Uang": currencyStr,
+      "Kurs": rateStr,
+      "Nominal Valas": foreignStr,
+      "Nominal IDR": Number(r.idr_amount),
+      "Metode": (r.payment_method ?? "cash").toUpperCase(),
+      "Status": r.status,
+      "Mencurigakan": r.is_suspicious ? "Ya" : "Tidak",
+      "Alasan LTKM": r.suspicious_reason ?? "-",
+    };
+  });
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Laporan Transaksi");
@@ -277,7 +298,7 @@ function ReportsPage() {
     let q = supabase
       .from("transactions")
       .select(
-        "id, transaction_no, transaction_type, transaction_date, rate, foreign_amount, idr_amount, payment_method, status, is_suspicious, suspicious_reason, ltkm_report_no, ltkm_reported_at, currencies(code), customers(customer_code, full_name, id_number), branches(code, name)",
+        "id, transaction_no, transaction_type, transaction_date, rate, foreign_amount, idr_amount, payment_method, status, is_suspicious, suspicious_reason, ltkm_report_no, ltkm_reported_at, currencies(code), customers(customer_code, full_name, id_number), branches(code, name), transaction_items(id, currency_id, foreign_amount, rate, idr_amount, currencies(code))",
       )
       .gte("transaction_date", range.from + "T00:00:00")
       .lte("transaction_date", range.to + "T23:59:59")
@@ -456,27 +477,41 @@ function ReportsPage() {
     // 3. Process transactions
     for (const r of rows) {
       if (r.status !== "completed") continue;
-      const code = r.currencies?.code ?? "-";
-      const existing =
-        map.get(code) ?? {
-          currency_id: "",
-          currency_code: code,
-          opening_foreign: 0,
-          opening_idr: 0,
-          buy_foreign: 0,
-          buy_idr: 0,
-          sell_foreign: 0,
-          sell_idr: 0,
-          mid_rate: null,
-        };
-      if (r.transaction_type === "buy") {
-        existing.buy_foreign += Number(r.foreign_amount);
-        existing.buy_idr += Number(r.idr_amount);
-      } else {
-        existing.sell_foreign += Number(r.foreign_amount);
-        existing.sell_idr += Number(r.idr_amount);
+
+      const items =
+        r.transaction_items && r.transaction_items.length > 0
+          ? r.transaction_items
+          : [
+              {
+                foreign_amount: r.foreign_amount,
+                idr_amount: r.idr_amount,
+                currencies: r.currencies,
+              },
+            ];
+
+      for (const item of items) {
+        const code = item.currencies?.code ?? r.currencies?.code ?? "-";
+        const existing =
+          map.get(code) ?? {
+            currency_id: "",
+            currency_code: code,
+            opening_foreign: 0,
+            opening_idr: 0,
+            buy_foreign: 0,
+            buy_idr: 0,
+            sell_foreign: 0,
+            sell_idr: 0,
+            mid_rate: null,
+          };
+        if (r.transaction_type === "buy") {
+          existing.buy_foreign += Number(item.foreign_amount);
+          existing.buy_idr += Number(item.idr_amount);
+        } else {
+          existing.sell_foreign += Number(item.foreign_amount);
+          existing.sell_idr += Number(item.idr_amount);
+        }
+        map.set(code, existing);
       }
-      map.set(code, existing);
     }
     
     return Array.from(map.values())
@@ -898,13 +933,50 @@ function ReportsPage() {
                           )}
                         </TableCell>
                         <TableCell className="font-mono">
-                          {r.currencies?.code}
+                          {r.transaction_items && r.transaction_items.length > 1 ? (
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold">{r.currencies?.code}</span>
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1 py-0 border-blue-300 bg-blue-50 text-blue-700 whitespace-nowrap"
+                                >
+                                  +{r.transaction_items.length - 1} Valas
+                                </Badge>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground font-sans">
+                                {r.transaction_items
+                                  .slice(1)
+                                  .map((it) => it.currencies?.code)
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </div>
+                            </div>
+                          ) : (
+                            r.currencies?.code
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {new Intl.NumberFormat("id-ID", {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          }).format(Number(r.foreign_amount))}
+                          {r.transaction_items && r.transaction_items.length > 1 ? (
+                            <div className="flex flex-col gap-0.5">
+                              {r.transaction_items.map((it) => (
+                                <div key={it.id} className="text-xs whitespace-nowrap">
+                                  <span className="text-[10px] text-muted-foreground mr-1">
+                                    {it.currencies?.code}
+                                  </span>
+                                  {new Intl.NumberFormat("id-ID", {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2,
+                                  }).format(Number(it.foreign_amount))}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            new Intl.NumberFormat("id-ID", {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 2,
+                            }).format(Number(r.foreign_amount))
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {fmtIDR(Number(r.idr_amount))}

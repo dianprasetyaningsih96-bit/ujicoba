@@ -25,6 +25,12 @@ export interface ReportTrxRow {
   currencies?: { code: string } | null;
   customers?: { customer_code: string; full_name: string; id_number: string } | null;
   branches?: { code: string; name: string } | null;
+  transaction_items?: Array<{
+    foreign_amount: number;
+    rate: number;
+    idr_amount: number;
+    currencies?: { code: string } | null;
+  }> | null;
 }
 
 export interface ReportMeta {
@@ -92,6 +98,29 @@ export function generateReportPdf(meta: ReportMeta, rows: ReportTrxRow[]) {
   const includeLtkm = meta.variant === "ltkm";
 
   const body = rows.map((r) => {
+    const isMulti = r.transaction_items && r.transaction_items.length > 1;
+    const valasCode = isMulti
+      ? r.transaction_items!.map((it) => it.currencies?.code ?? "-").join("\n")
+      : r.currencies?.code ?? "-";
+    const valasNominal = isMulti
+      ? r.transaction_items!
+          .map((it) => new Intl.NumberFormat("id-ID").format(Number(it.foreign_amount)))
+          .join("\n")
+      : new Intl.NumberFormat("id-ID").format(Number(r.foreign_amount));
+    const valasKurs = isMulti
+      ? r.transaction_items!
+          .map((it) =>
+            new Intl.NumberFormat("id-ID", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(Number(it.rate)),
+          )
+          .join("\n")
+      : new Intl.NumberFormat("id-ID", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(Number(r.rate));
+
     const base = [
       r.transaction_no,
       new Date(r.transaction_date).toLocaleString("id-ID"),
@@ -99,12 +128,9 @@ export function generateReportPdf(meta: ReportMeta, rows: ReportTrxRow[]) {
       r.branches?.code ?? "-",
       r.customers?.full_name ?? "Walk-in",
       r.customers?.id_number ?? "-",
-      r.currencies?.code ?? "-",
-      new Intl.NumberFormat("id-ID").format(Number(r.foreign_amount)),
-      new Intl.NumberFormat("id-ID", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(Number(r.rate)),
+      valasCode,
+      valasNominal,
+      valasKurs,
       fmtIDR(Number(r.idr_amount)),
       r.payment_method,
       r.status + (r.is_suspicious ? " · LTKM" : ""),
