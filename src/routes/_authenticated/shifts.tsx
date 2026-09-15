@@ -1400,16 +1400,21 @@ function CloseShiftDialog({
         const targetHqId = hqData?.id ?? null;
 
         const transfers = rows
-          .filter((r) => r.system_balance > 0)
-          .map((r) => ({
-            branch_id: shift.branch_id,
-            target_branch_id: targetHqId,
-            currency_id: r.currency_id,
-            amount: r.system_balance,
-            shift_id: shift.id,
-            status: "pending" as const,
-            notes: `Setoran sisa saldo kas & valas tutup shif sore ${shift.branch?.name || ""}`,
-          }));
+          .filter((r) => r.system_balance > 0 || (Number(r.physical_balance) || 0) > 0)
+          .map((r) => {
+            const amount = (Number(r.physical_balance) || 0) > 0
+              ? Number(r.physical_balance)
+              : r.system_balance;
+            return {
+              branch_id: shift.branch_id,
+              target_branch_id: targetHqId,
+              currency_id: r.currency_id,
+              amount: amount,
+              shift_id: shift.id,
+              status: "pending" as const,
+              notes: `Setoran sisa saldo kas & valas tutup shif sore ${shift.branch?.name || ""}`,
+            };
+          });
 
         if (transfers.length > 0) {
           const { error: txErr } = await supabase.from("branch_transfers").insert(transfers);
