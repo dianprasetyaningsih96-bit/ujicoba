@@ -670,22 +670,29 @@ function EditShiftDialog({
   onSaved: () => void;
 }) {
   const [shiftType, setShiftType] = useState<ShiftType>(shift.shift_type);
+  const [openingCapital, setOpeningCapital] = useState<string>(
+    shift.opening_capital > 0 ? String(shift.opening_capital) : ""
+  );
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
+    const parsedCapital = Number(openingCapital.replace(/[^\d]/g, "")) || 0;
     const { error } = await supabase
       .from("shifts")
-      .update({ shift_type: shiftType })
+      .update({
+        shift_type: shiftType,
+        opening_capital: parsedCapital,
+      })
       .eq("id", shift.id);
     setSaving(false);
 
     if (error) {
-      toast.error("Gagal mengubah shif: " + error.message);
+      toast.error("Gagal mengubah data shif: " + error.message);
       return;
     }
 
-    toast.success("Jenis shif berhasil diperbarui");
+    toast.success("Data shif berhasil diperbarui");
     onSaved();
   };
 
@@ -693,9 +700,9 @@ function EditShiftDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Koreksi Jenis Shif</DialogTitle>
+          <DialogTitle>Koreksi Data Shif</DialogTitle>
           <DialogDescription>
-            Ubah jenis shif untuk {shift.branch?.name ?? "Cabang"} (Buka: {formatDateTime(shift.opened_at)}).
+            Ubah jenis shif dan modal awal untuk {shift.branch?.name ?? "Cabang"} (Buka: {formatDateTime(shift.opened_at)}).
           </DialogDescription>
         </DialogHeader>
 
@@ -713,9 +720,32 @@ function EditShiftDialog({
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <Label>Modal Awal (IDR)</Label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={
+                openingCapital
+                  ? Number(openingCapital.replace(/[^\d]/g, "")).toLocaleString("id-ID")
+                  : ""
+              }
+              onChange={(e) => {
+                const clean = e.target.value.replace(/[^\d]/g, "");
+                setOpeningCapital(clean);
+              }}
+              placeholder="0"
+            />
+            <p className="text-xs text-muted-foreground">
+              {shiftType === "siang"
+                ? "Sisa saldo kas IDR dari serah terima shif pagi."
+                : "Modal kas awal IDR saat pembukaan shif pagi."}
+            </p>
+          </div>
+
           <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md space-y-1">
             <p><strong>Catatan:</strong></p>
-            <p>• Mengubah jenis shif tidak mempengaruhi saldo kas fisik maupun transaksi yang telah tercatat.</p>
+            <p>• Mengubah jenis shif / modal awal pada data riwayat tidak mengubah mutasi kas fisik yang telah berjalan.</p>
             <p>• Shif Siang/Sore otomatis ditandai sebagai serah terima lanjutan dari sisa kas shif pagi.</p>
           </div>
         </div>
