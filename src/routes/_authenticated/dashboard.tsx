@@ -595,8 +595,11 @@ function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-base">Distribusi Mata Uang</CardTitle>
+            <span className="text-xs text-muted-foreground">
+              Volume transaksi {days} hari
+            </span>
           </CardHeader>
           <CardContent className="h-[300px]">
             {currencyMix.length === 0 ? (
