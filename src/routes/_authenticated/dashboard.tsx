@@ -574,12 +574,12 @@ function DashboardPage() {
               <AreaChart data={trendData}>
                 <defs>
                   <linearGradient id="gBuy" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#2563eb" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} />
                   </linearGradient>
                   <linearGradient id="gSell" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#ea580c" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#ea580c" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -587,8 +587,8 @@ function DashboardPage() {
                 <YAxis stroke="var(--muted-foreground)" fontSize={12} tickFormatter={(v) => `${v}jt`} />
                 <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => `Rp ${v} juta`} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="buy" name="Beli" stroke="var(--chart-1)" fill="url(#gBuy)" strokeWidth={2} />
-                <Area type="monotone" dataKey="sell" name="Jual" stroke="var(--chart-2)" fill="url(#gSell)" strokeWidth={2} />
+                <Area type="monotone" dataKey="buy" name="Beli" stroke="#2563eb" fill="url(#gBuy)" strokeWidth={2.5} activeDot={{ r: 5 }} />
+                <Area type="monotone" dataKey="sell" name="Jual" stroke="#ea580c" fill="url(#gSell)" strokeWidth={2.5} activeDot={{ r: 5 }} />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
