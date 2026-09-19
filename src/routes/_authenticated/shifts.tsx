@@ -861,10 +861,7 @@ function OpenShiftDialog({
   const assignedBranch = branches.find((b) => b.id === branchId) ?? branches.find((b) => b.id === defaultBranchId);
   const isHq = Boolean(
     assignedBranch &&
-    ((assignedBranch as any).is_head_office ||
-      (assignedBranch as any).is_hq ||
-      assignedBranch.name.toLowerCase().includes("pusat") ||
-      assignedBranch.name.toLowerCase().includes("jimbaran"))
+    ((assignedBranch as any).is_head_office || (assignedBranch as any).is_hq)
   );
 
   useEffect(() => {
@@ -1062,11 +1059,7 @@ function OpenShiftDialog({
         const idrCur = currencies.find((c) => c.code.toUpperCase() === "IDR");
         const hqBranch =
           branches.find(
-            (b) =>
-              (b as any).is_head_office ||
-              (b as any).is_hq ||
-              b.name.toLowerCase().includes("pusat") ||
-              b.name.toLowerCase().includes("jimbaran"),
+            (b) => (b as any).is_head_office || (b as any).is_hq
           ) || branches[0];
 
         if (idrCur && hqBranch) {
@@ -1519,7 +1512,7 @@ function CloseShiftDialog({
         const { data: hqData } = await supabase
           .from("branches")
           .select("id")
-          .or("is_head_office.eq.true,is_hq.eq.true,name.ilike.%pusat%,name.ilike.%jimbaran%")
+          .order("is_head_office", { ascending: false })
           .limit(1)
           .maybeSingle();
 

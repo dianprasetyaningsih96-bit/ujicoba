@@ -153,6 +153,7 @@ interface BranchOpt {
   id: string;
   code: string;
   name: string;
+  is_head_office?: boolean;
 }
 interface CustomerOpt {
   id: string;
@@ -596,14 +597,7 @@ function TransactionsPage() {
       return;
     }
     const hqId =
-      branches.find(
-        (b) =>
-          b.is_head_office ||
-          (b as any).is_hq ||
-          b.code.toUpperCase().includes("HQ") ||
-          b.name.toLowerCase().includes("pusat") ||
-          b.name.toLowerCase().includes("jimbaran"),
-      )?.id ?? branches[0]?.id;
+      branches.find((b) => b.is_head_office || (b as any).is_hq)?.id ?? branches[0]?.id;
     const branchId = activeShift?.branch_id ?? hqId ?? HQ;
     setForm({
       ...emptyForm(),

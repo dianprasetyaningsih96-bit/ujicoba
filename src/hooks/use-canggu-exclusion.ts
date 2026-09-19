@@ -15,10 +15,12 @@ export function useCangguExclusion() {
         .ilike("name", "%Canggu%")
         .limit(1)
         .single()
-        .then(({ data }) => {
-          if (data) setCangguId(data.id);
-        })
-        .catch(console.error);
+        .then(
+          ({ data }) => {
+            if (data) setCangguId(data.id);
+          },
+          (err) => console.error(err)
+        );
     }
   }, [isExcluded]);
 

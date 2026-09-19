@@ -42,6 +42,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -369,15 +376,17 @@ function SettingsPage() {
       return;
     }
 
-    // Save each branch's address, city, phone, and branch_letter to branches table
+    // Save each branch's name, address, city, phone, branch_letter, and is_head_office to branches table
     for (const b of branches) {
       const { error: branchError } = await (supabase
         .from("branches")
         .update({
+          name: b.name.trim(),
           address: b.address.trim() || null,
           city: b.city.trim() || null,
           phone: b.phone.trim() || null,
           branch_letter: b.branch_letter ? b.branch_letter.trim().toUpperCase() : null,
+          is_head_office: !!b.is_head_office,
         } as any)
         .eq("id", b.id) as any);
 
@@ -573,11 +582,58 @@ function SettingsPage() {
                 Belum ada data cabang terdaftar.
               </div>
             ) : (
-              <div className="space-y-3.5">
+              <div className="space-y-4">
+                {/* Selector Dropdown Kantor Pusat Utama */}
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                        <Label className="text-sm font-semibold text-foreground">
+                          Pilih Cabang Sebagai Kantor Pusat (Head Office)
+                        </Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Cabang yang dipilih menjadi pusat penerima transfer sisa kas harian & pusat transaksi jual valas.
+                      </p>
+                    </div>
+                    <div className="w-full sm:w-[260px]">
+                      <Select
+                        value={branches.find((b) => b.is_head_office)?.id || ""}
+                        onValueChange={(val) => {
+                          setBranches(
+                            branches.map((b) => ({
+                              ...b,
+                              is_head_office: b.id === val,
+                            }))
+                          );
+                        }}
+                        disabled={loading || saving}
+                      >
+                        <SelectTrigger className="bg-background font-medium">
+                          <SelectValue placeholder="Pilih Kantor Pusat..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {branches.map((b) => (
+                            <SelectItem key={b.id} value={b.id} className="font-medium">
+                              {b.name} ({b.code})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3.5">
                 {branches.map((b, idx) => (
                   <div
                     key={b.id}
-                    className="rounded-xl border bg-muted/15 p-4 space-y-3 transition-colors hover:bg-muted/25 shadow-xs"
+                    className={`rounded-xl border p-4 space-y-3 transition-colors shadow-xs ${
+                      b.is_head_office
+                        ? "bg-emerald-500/5 border-emerald-500/30 dark:bg-emerald-950/15"
+                        : "bg-muted/15 border-border hover:bg-muted/25"
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -587,22 +643,54 @@ function SettingsPage() {
                         <span className="font-semibold text-sm">{b.name}</span>
                       </div>
                       {b.is_head_office ? (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-[10px]">
-                          Kantor Pusat
+                        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] gap-1 py-1 px-2.5">
+                          <CheckCircle2 className="h-3 w-3" /> Kantor Pusat Aktif
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px]">
-                          Cabang
-                        </Badge>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setBranches(
+                              branches.map((item) => ({
+                                ...item,
+                                is_head_office: item.id === b.id,
+                              }))
+                            );
+                          }}
+                          disabled={loading || saving}
+                          className="h-7 text-xs border-dashed text-muted-foreground hover:text-emerald-700 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1.5 transition-colors"
+                        >
+                          <Building2 className="h-3 w-3" />
+                          Jadikan Kantor Pusat
+                        </Button>
                       )}
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor={`branch-addr-${b.id}`} className="text-xs font-medium">
-                        Alamat Lengkap Cabang
-                      </Label>
-                      <Input
-                        id={`branch-addr-${b.id}`}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`branch-name-${b.id}`} className="text-xs font-medium">
+                          Nama Cabang
+                        </Label>
+                        <Input
+                          id={`branch-name-${b.id}`}
+                          value={b.name}
+                          onChange={(e) => {
+                            const updated = [...branches];
+                            updated[idx] = { ...b, name: e.target.value };
+                            setBranches(updated);
+                          }}
+                          placeholder="Nama Cabang"
+                          disabled={loading || saving}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`branch-addr-${b.id}`} className="text-xs font-medium">
+                          Alamat Lengkap Cabang
+                        </Label>
+                        <Input
+                          id={`branch-addr-${b.id}`}
                         value={b.address}
                         onChange={(e) => {
                           const updated = [...branches];
@@ -613,8 +701,9 @@ function SettingsPage() {
                         disabled={loading || saving}
                       />
                     </div>
+                  </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1.5">
                         <Label htmlFor={`branch-city-${b.id}`} className="text-xs font-medium">
                           Kota / Kabupaten
@@ -668,6 +757,7 @@ function SettingsPage() {
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
             )}
           </div>

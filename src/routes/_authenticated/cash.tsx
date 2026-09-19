@@ -317,13 +317,7 @@ function CashPage() {
 
     const idrCur = currencies.find((c) => c.code.toUpperCase() === "IDR");
     const hqBranch =
-      branches.find(
-        (b) =>
-          b.is_head_office ||
-          (b as any).is_hq ||
-          b.name.toLowerCase().includes("pusat") ||
-          b.name.toLowerCase().includes("jimbaran"),
-      ) || branches[0];
+      branches.find((b) => b.is_head_office || (b as any).is_hq) || branches[0];
 
     if (!idrCur || !hqBranch) {
       toast.error("Konfigurasi mata uang IDR atau Kantor Pusat tidak ditemukan");
@@ -360,10 +354,7 @@ function CashPage() {
   );
   const isHeadOffice = Boolean(
     activeBranch &&
-      (activeBranch.is_head_office ||
-        (activeBranch as any).is_hq ||
-        activeBranch.name.toLowerCase().includes("pusat") ||
-        activeBranch.name.toLowerCase().includes("jimbaran")),
+      (activeBranch.is_head_office || (activeBranch as any).is_hq)
   );
 
   // Tombol "Catat Mutasi" HANYA muncul untuk Super Admin / Kantor Pusat
