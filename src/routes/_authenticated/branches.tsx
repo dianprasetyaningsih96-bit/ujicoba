@@ -53,6 +53,7 @@ interface Branch {
   phone: string | null;
   license_no: string | null;
   is_active: boolean;
+  is_head_office?: boolean;
   created_at: string;
 }
 
@@ -64,6 +65,7 @@ const branchSchema = z.object({
   phone: z.string().trim().max(30).optional().or(z.literal("")),
   license_no: z.string().trim().max(80).optional().or(z.literal("")),
   is_active: z.boolean(),
+  is_head_office: z.boolean().default(false),
 });
 
 type BranchForm = z.infer<typeof branchSchema>;
@@ -76,6 +78,7 @@ const empty: BranchForm = {
   phone: "",
   license_no: "",
   is_active: true,
+  is_head_office: false,
 };
 
 function BranchesPage() {
@@ -93,6 +96,7 @@ function BranchesPage() {
     const { data, error } = await supabase
       .from("branches")
       .select("*")
+      .order("is_head_office", { ascending: false })
       .order("code");
     if (error) {
       toast.error("Gagal memuat cabang", { description: error.message });
@@ -121,6 +125,7 @@ function BranchesPage() {
       phone: row.phone ?? "",
       license_no: row.license_no ?? "",
       is_active: row.is_active,
+      is_head_office: !!row.is_head_office,
     });
     setOpen(true);
   }
@@ -134,6 +139,16 @@ function BranchesPage() {
       return;
     }
     setSaving(true);
+
+    // Jika cabang ini dijadikan Kantor Pusat, lepas status Kantor Pusat dari cabang lain
+    if (parsed.data.is_head_office) {
+      if (editing) {
+        await supabase.from("branches").update({ is_head_office: false } as any).neq("id", editing.id);
+      } else {
+        await supabase.from("branches").update({ is_head_office: false } as any);
+      }
+    }
+
     const payload = {
       code: parsed.data.code.toUpperCase(),
       name: parsed.data.name,
@@ -142,6 +157,7 @@ function BranchesPage() {
       phone: parsed.data.phone || null,
       license_no: parsed.data.license_no || null,
       is_active: parsed.data.is_active,
+      is_head_office: parsed.data.is_head_office,
     };
     const { error } = editing
       ? await supabase.from("branches").update(payload).eq("id", editing.id)
@@ -219,7 +235,16 @@ function BranchesPage() {
                     <TableCell className="font-mono font-medium">
                       {row.code}
                     </TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{row.name}</span>
+                        {row.is_head_office && (
+                          <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] py-0 px-2 h-5">
+                            Kantor Pusat
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{row.city ?? "—"}</TableCell>
                     <TableCell>{row.phone ?? "—"}</TableCell>
                     <TableCell>{row.license_no ?? "—"}</TableCell>
@@ -318,7 +343,26 @@ function BranchesPage() {
                 maxLength={30}
               />
             </div>
-            <div className="flex items-center gap-3 col-span-2 pt-2">
+            <div className="flex items-center justify-between col-span-2 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5">
+                  <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <Label htmlFor="branch-hq" className="text-sm font-semibold cursor-pointer">
+                    Jadikan Kantor Pusat (Head Office)
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Menetapkan cabang ini sebagai pusat penerima sisa kas dan pusat jual valas.
+                </p>
+              </div>
+              <Switch
+                checked={form.is_head_office}
+                onCheckedChange={(v) => setForm({ ...form, is_head_office: v })}
+                id="branch-hq"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 col-span-2 pt-1">
               <Switch
                 checked={form.is_active}
                 onCheckedChange={(v) => setForm({ ...form, is_active: v })}
