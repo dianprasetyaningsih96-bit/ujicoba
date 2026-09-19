@@ -1540,16 +1540,10 @@ function CloseShiftDialog({
           if (txErr) {
             toast.error("Gagal membuat transfer otomatis: " + txErr.message);
           } else {
-            toast.info(`${transfers.length} saldo kas & valas otomatis ditransfer ke Kantor Pusat untuk persetujuan.`);
-            
-            // Segera sinkronkan saldo aktif cabang ke 0 agar tidak meninggalkan saldo gantung
-            for (const tr of transfers) {
-              await supabase
-                .from("cash_balances")
-                .update({ balance: 0, updated_at: new Date().toISOString() })
-                .eq("branch_id", shift.branch_id)
-                .eq("currency_id", tr.currency_id);
-            }
+            toast.info(`${transfers.length} saldo kas & valas menunggu persetujuan Kantor Pusat.`);
+            // Catatan: cash_balances TIDAK direset di sini.
+            // Pengurangan saldo dilakukan HANYA oleh process_branch_transfer di database
+            // saat transfer disetujui, agar tidak terjadi double-deduction.
           }
         }
       } catch (err) {
