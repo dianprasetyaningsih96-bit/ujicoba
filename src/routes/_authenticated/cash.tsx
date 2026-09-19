@@ -285,13 +285,12 @@ function CashPage() {
     const signed =
       kind === "withdrawal" ? -Math.abs(amount) : Math.abs(amount);
 
-    const { error } = await supabase.from("cash_movements").insert({
-      branch_id: parsed.data.branch_id,
-      currency_id: parsed.data.currency_id,
-      movement_type: kind,
-      amount: signed,
-      notes: parsed.data.notes || null,
-      created_by: user?.id ?? null,
+    const { error } = await supabase.rpc("create_manual_cash_movement", {
+      p_branch_id: parsed.data.branch_id,
+      p_currency_id: parsed.data.currency_id,
+      p_movement_type: kind,
+      p_amount: signed,
+      p_notes: parsed.data.notes || "",
     });
     setSaving(false);
     if (error) {
