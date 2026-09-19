@@ -229,7 +229,9 @@ const fmtIDR = (n: number) =>
     currency: "IDR",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(n);
+  })
+    .format(n)
+    .replace(/\s+/g, "\u00A0");
 
 const fmtNum = (n: number, d = 2) =>
   new Intl.NumberFormat("id-ID", {
@@ -977,7 +979,7 @@ function TransactionsPage() {
   }, [viewing]);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-4 sm:gap-6 p-3 sm:p-6">
       <MasterPageHeader
         title="Transaksi"
         description="Pencatatan transaksi beli & jual valuta asing."
@@ -1039,7 +1041,7 @@ function TransactionsPage() {
       )}
 
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
           <StatCard label={statLabels.count} value={String(stats.count)} />
           <StatCard
             label={statLabels.buy}
@@ -2170,17 +2172,33 @@ function StatCard({
 }) {
   const toneCls =
     tone === "emerald"
-      ? "text-emerald-600"
+      ? "text-emerald-600 dark:text-emerald-400"
       : tone === "blue"
         ? "text-primary"
         : tone === "red"
           ? "text-destructive"
           : "";
+
+  // Ukuran font adaptif berdasarkan panjang karakter agar tidak melewati batas kotak di mobile
+  const isLong = value.length > 13;
+  const isMedium = value.length > 9;
+
+  const sizeCls = isLong
+    ? "text-[11px] min-[360px]:text-[12px] min-[390px]:text-[13px] sm:text-base lg:text-lg"
+    : isMedium
+      ? "text-xs min-[360px]:text-sm sm:text-lg lg:text-xl"
+      : "text-base sm:text-xl lg:text-2xl";
+
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className={`text-xl font-bold font-mono mt-1 ${toneCls}`}>
+    <Card className="overflow-hidden shadow-xs border">
+      <CardContent className="p-2.5 sm:p-4">
+        <div className="text-[10px] sm:text-xs text-muted-foreground font-medium truncate" title={label}>
+          {label}
+        </div>
+        <div
+          className={`font-bold font-sans tabular-nums mt-0.5 sm:mt-1 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis ${sizeCls} ${toneCls}`}
+          title={value}
+        >
           {value}
         </div>
       </CardContent>
