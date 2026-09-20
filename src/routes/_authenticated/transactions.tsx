@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { z } from "zod";
+import * as XLSX from "xlsx";
 import {
   ArrowLeftRight,
   ArrowDownCircle,
@@ -591,6 +592,64 @@ function TransactionsPage() {
   const isVerified = selectedCustomer?.kyc_status === "verified";
   const blacklistBlock = selectedCustomer?.is_blacklisted;
 
+  function exportToExcel() {
+    if (!filtered || filtered.length === 0) {
+      toast.error("Tidak ada data untuk diekspor");
+      return;
+    }
+
+    const IDR = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 });
+    const FMT = (n: number, dec = 2) =>
+      new Intl.NumberFormat("id-ID", { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n);
+
+    const data = filtered.map((r) => {
+      // Kumpulkan semua mata uang valas dari transaction_items
+      const items = r.transaction_items ?? [];
+      const currencyCodes = items.length > 0
+        ? [...new Set(items.map((it) => it.currencies?.code).filter(Boolean))].join(", ")
+        : (r.currencies?.code ?? "-");
+      const totalForeign = items.reduce((sum, it) => sum + Number(it.foreign_amount || 0), 0);
+      const avgRate = items.length > 0
+        ? items.reduce((sum, it) => sum + Number(it.rate || 0), 0) / items.length
+        : Number(r.rate || 0);
+
+      return {
+        "No. Transaksi": r.transaction_no,
+        "Tanggal": r.transaction_date
+          ? new Date(r.transaction_date).toLocaleDateString("id-ID", {
+              day: "2-digit", month: "2-digit", year: "numeric",
+              hour: "2-digit", minute: "2-digit",
+            })
+          : "-",
+        "Tipe": r.transaction_type === "buy" ? "Beli" : "Jual",
+        "Cabang": r.branches?.name ?? "-",
+        "Mata Uang": currencyCodes,
+        "Nominal Valas": FMT(totalForeign, 2),
+        "Kurs (Avg)": FMT(avgRate, 2),
+        "Total IDR": IDR.format(Number(r.idr_amount || 0)),
+        "Nasabah": r.customers?.full_name ?? "-",
+        "Kode Nasabah": r.customers?.customer_code ?? "-",
+        "Status": r.status === "completed" ? "Selesai" : r.status === "voided" ? "Dibatalkan" : r.status,
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+
+    // Auto-width kolom
+    const colWidths = Object.keys(data[0] ?? {}).map((key) => ({
+      wch: Math.max(key.length, ...data.map((row) => String((row as Record<string, unknown>)[key] ?? "").length)) + 2,
+    }));
+    ws["!cols"] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transaksi");
+
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+    XLSX.writeFile(wb, `Transaksi_AMV_${stamp}.xlsx`);
+    toast.success(`${filtered.length} transaksi berhasil diekspor`);
+  }
+
   function openCreate(type: TxType) {
     if (!activeShift && !shiftExempt) {
       toast.error("Shif belum dibuka", {
@@ -995,26 +1054,37 @@ function TransactionsPage() {
         description="Pencatatan transaksi beli & jual valuta asing."
         canWrite={false}
         extra={
-          canWrite && (
-            <>
-              <Button
-                onClick={() => openCreate("buy")}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-              >
-                <ArrowDownCircle className="h-4 w-4" />
-                Beli Valas
-              </Button>
-              {canSell && (
+          <>
+            <Button
+              variant="outline"
+              onClick={exportToExcel}
+              className="gap-2"
+              title="Export data yang sedang ditampilkan ke Excel"
+            >
+              <FileDown className="h-4 w-4" />
+              Export Excel
+            </Button>
+            {canWrite && (
+              <>
                 <Button
-                  onClick={() => openCreate("sell")}
-                  className="gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
+                  onClick={() => openCreate("buy")}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                 >
-                  <ArrowUpCircle className="h-4 w-4" />
-                  Jual Valas
+                  <ArrowDownCircle className="h-4 w-4" />
+                  Beli Valas
                 </Button>
-              )}
-            </>
-          )
+                {canSell && (
+                  <Button
+                    onClick={() => openCreate("sell")}
+                    className="gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
+                  >
+                    <ArrowUpCircle className="h-4 w-4" />
+                    Jual Valas
+                  </Button>
+                )}
+              </>
+            )}
+          </>
         }
       />
 
