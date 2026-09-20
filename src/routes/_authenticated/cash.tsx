@@ -198,7 +198,10 @@ function CashPage() {
   async function loadData(bId: string) {
     setBalances(null);
     setMovements(null);
-    const isAll = !lockedBranchId && (bId === "__all__" || !bId);
+    const isAll = bId === "__all__" || !bId;
+    // Jika ada lockedBranchId, paksa query untuk cabang tersebut meskipun state bId = "__all__" karena race condition
+    const targetBranchId = lockedBranchId ? lockedBranchId : (isAll ? null : bId);
+
     let balQ = supabase
       .from("cash_balances")
       .select("*, currencies(id, code, name, decimals), branches(code, name)");
@@ -207,9 +210,10 @@ function CashPage() {
       .select("*, currencies(code), branches(code, name)")
       .order("created_at", { ascending: false })
       .limit(500);
-    if (!isAll) {
-      balQ = balQ.eq("branch_id", bId);
-      mvQ = mvQ.eq("branch_id", bId);
+
+    if (targetBranchId) {
+      balQ = balQ.eq("branch_id", targetBranchId);
+      mvQ = mvQ.eq("branch_id", targetBranchId);
     }
     const [
       { data: bal, error: e1 },
@@ -225,9 +229,9 @@ function CashPage() {
           "id, branch_id, target_branch_id, currency_id, amount, status, notes, created_at, branch:branches!branch_transfers_branch_id_fkey(code, name), target_branch:branches!branch_transfers_target_branch_id_fkey(code, name)",
         )
         .eq("status", "accepted"),
-      isAll 
+      !targetBranchId 
         ? supabase.rpc("get_valas_recap") 
-        : supabase.rpc("get_valas_recap", { p_branch_id: bId }),
+        : supabase.rpc("get_valas_recap", { p_branch_id: targetBranchId }),
     ]);
     if (e1) toast.error("Gagal memuat saldo", { description: e1.message });
     if (e2) toast.error("Gagal memuat mutasi", { description: e2.message });
