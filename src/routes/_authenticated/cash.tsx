@@ -444,11 +444,11 @@ function CashPage() {
       });
     }
 
-    // Setelah merge valasRecap, override balance menjadi totalBought - totalSold
-    // agar nilai "Siap Jual" selalu konsisten dengan angka Beli dan Jual di layar.
+    // "Siap Jual" diambil dari cash_balances (balance = SUM per cabang dijumlahkan),
+    // yang kini selalu sinkron otomatis via trigger di cash_movements.
+    // totalBought & totalSold dari RPC ditampilkan sebagai informasi riwayat.
     const valasSummary = Array.from(valasMap.values())
-      .map(v => ({ ...v, balance: v.totalBought - v.totalSold }))
-      .filter(v => v.totalBought > 0 || v.totalSold > 0)
+      .filter(v => v.balance > 0 || v.totalBought > 0 || v.totalSold > 0)
       .sort((a, b) => a.code.localeCompare(b.code));
 
     return {
