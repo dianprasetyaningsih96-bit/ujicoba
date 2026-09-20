@@ -189,8 +189,9 @@ function CashPage() {
     setCurrencies((c as Currency[]) ?? []);
     if (lockedBranchId) {
       setBranchId(lockedBranchId);
-    } else if (!branchId && b && b.length > 0) {
-      setBranchId(b[0].id);
+    } else if (!branchId) {
+      // super_admin / owner / branch_manager: default ke "Semua Cabang"
+      setBranchId("__all__");
     }
   }
 
