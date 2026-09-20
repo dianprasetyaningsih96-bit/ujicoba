@@ -577,15 +577,15 @@ function CashPage() {
                 <p className="text-sm">Tidak ada valas yang tersedia untuk dijual saat ini.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {totals.valasSummary.map((v) => {
                   const flagUrl = getCurrencyFlagUrl(v.code);
                   return (
                     <div
                       key={v.code}
-                      className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm hover:shadow-md transition-shadow overflow-hidden min-w-0"
+                      className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm hover:shadow-md transition-shadow"
                     >
-                      <div className="flex items-center gap-2 w-full pb-2 border-b min-w-0">
+                      <div className="flex items-center gap-2 w-full pb-2 border-b">
                         <img
                           src={flagUrl}
                           alt={v.code}
@@ -596,25 +596,25 @@ function CashPage() {
                         />
                         <div className="flex flex-col leading-tight min-w-0">
                           <span className="font-bold text-base font-mono">{v.code}</span>
-                          <span className="text-[10px] text-muted-foreground truncate">{v.name}</span>
+                          <span className="text-[10px] text-muted-foreground">{v.name}</span>
                         </div>
                       </div>
 
-                      <div className="w-full flex flex-col gap-1.5 min-w-0">
-                        <div className="flex items-center justify-between gap-1 min-w-0">
+                      <div className="w-full flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0"><ArrowDownCircle className="h-3 w-3 text-blue-500" /> Beli</span>
-                          <span className="text-xs font-mono tabular-nums text-right truncate">{fmt(v.totalBought, v.decimals)}</span>
+                          <span className="text-xs font-mono tabular-nums text-right">{fmt(v.totalBought, v.decimals)}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0"><ArrowUpCircle className="h-3 w-3 text-orange-500" /> Jual</span>
-                          <span className="text-xs font-mono tabular-nums text-right truncate">{fmt(v.totalSold, v.decimals)}</span>
+                          <span className="text-xs font-mono tabular-nums text-right">{fmt(v.totalSold, v.decimals)}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-1 pt-1.5 border-t min-w-0">
+                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t">
                           <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50 gap-1 text-[10px] font-mono px-1.5 py-0 h-5 flex-shrink-0">
                             <CheckCircle2 className="h-2.5 w-2.5" />
                             Siap
                           </Badge>
-                          <span className="text-sm font-bold font-mono tabular-nums text-emerald-700 text-right truncate">
+                          <span className="text-xs font-bold font-mono tabular-nums text-emerald-700 text-right">
                             {fmt(v.balance, v.decimals)}
                           </span>
                         </div>
