@@ -1145,12 +1145,6 @@ function TransactionsPage() {
         </div>
       )}
 
-      {canWrite && !activeShift && shiftExempt && (
-        <div className="text-xs text-muted-foreground">
-          Mode Super Admin — transaksi tidak memerlukan shif aktif.
-        </div>
-      )}
-
       {canWrite && activeShift && (
         <div className="text-xs text-muted-foreground">
           Shif aktif:{" "}
