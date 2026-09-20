@@ -600,44 +600,85 @@ function TransactionsPage() {
 
     const IDR = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0 });
     const FMT = (n: number, dec = 2) =>
-      new Intl.NumberFormat("id-ID", { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n);
+      new Intl.NumberFormat("id-ID", {
+        minimumFractionDigits: dec,
+        maximumFractionDigits: dec,
+      }).format(n);
 
-    const data = filtered.map((r) => {
-      // Kumpulkan semua mata uang valas dari transaction_items
+    // Expand: 1 baris per item valas
+    // Untuk transaksi single-item → 1 baris
+    // Untuk transaksi multi-item → N baris (masing-masing punya nominal & kurs sendiri)
+    const data: Record<string, string>[] = [];
+
+    filtered.forEach((r) => {
+      const tanggal = r.transaction_date
+        ? new Date(r.transaction_date).toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "-";
+      const tipe = r.transaction_type === "buy" ? "Beli" : "Jual";
+      const cabang = r.branches?.name ?? "-";
+      const nasabah = r.customers?.full_name ?? "-";
+      const kodeNasabah = r.customers?.customer_code ?? "-";
+      const status =
+        r.status === "completed"
+          ? "Selesai"
+          : r.status === "voided"
+            ? "Dibatalkan"
+            : r.status;
+      const totalIdr = IDR.format(Number(r.idr_amount || 0));
+
       const items = r.transaction_items ?? [];
-      const currencyCodes = items.length > 0
-        ? [...new Set(items.map((it) => it.currencies?.code).filter(Boolean))].join(", ")
-        : (r.currencies?.code ?? "-");
-      const totalForeign = items.reduce((sum, it) => sum + Number(it.foreign_amount || 0), 0);
-      const avgRate = items.length > 0
-        ? items.reduce((sum, it) => sum + Number(it.rate || 0), 0) / items.length
-        : Number(r.rate || 0);
 
-      return {
-        "No. Transaksi": r.transaction_no,
-        "Tanggal": r.transaction_date
-          ? new Date(r.transaction_date).toLocaleDateString("id-ID", {
-              day: "2-digit", month: "2-digit", year: "numeric",
-              hour: "2-digit", minute: "2-digit",
-            })
-          : "-",
-        "Tipe": r.transaction_type === "buy" ? "Beli" : "Jual",
-        "Cabang": r.branches?.name ?? "-",
-        "Mata Uang": currencyCodes,
-        "Nominal Valas": FMT(totalForeign, 2),
-        "Kurs (Avg)": FMT(avgRate, 2),
-        "Total IDR": IDR.format(Number(r.idr_amount || 0)),
-        "Nasabah": r.customers?.full_name ?? "-",
-        "Kode Nasabah": r.customers?.customer_code ?? "-",
-        "Status": r.status === "completed" ? "Selesai" : r.status === "voided" ? "Dibatalkan" : r.status,
-      };
+      if (items.length === 0) {
+        // Fallback jika tidak ada item
+        data.push({
+          "No. Transaksi": r.transaction_no,
+          "Tanggal": tanggal,
+          "Tipe": tipe,
+          "Cabang": cabang,
+          "Mata Uang": r.currencies?.code ?? "-",
+          "Nominal Valas": FMT(Number(r.foreign_amount || 0), 2),
+          "Kurs": FMT(Number(r.rate || 0), 2),
+          "Total IDR": totalIdr,
+          "Nasabah": nasabah,
+          "Kode Nasabah": kodeNasabah,
+          "Status": status,
+        });
+      } else {
+        items.forEach((it, idx) => {
+          data.push({
+            // Kolom identitas transaksi hanya di baris pertama agar rapi,
+            // baris berikutnya di transaksi yang sama tetap diisi agar bisa di-filter di Excel
+            "No. Transaksi": r.transaction_no,
+            "Tanggal": idx === 0 ? tanggal : "",
+            "Tipe": idx === 0 ? tipe : "",
+            "Cabang": idx === 0 ? cabang : "",
+            "Mata Uang": it.currencies?.code ?? "-",
+            "Nominal Valas": FMT(Number(it.foreign_amount || 0), 2),
+            "Kurs": FMT(Number(it.rate || 0), 2),
+            "Total IDR": idx === 0 ? totalIdr : "",
+            "Nasabah": idx === 0 ? nasabah : "",
+            "Kode Nasabah": idx === 0 ? kodeNasabah : "",
+            "Status": idx === 0 ? status : "",
+          });
+        });
+      }
     });
 
     const ws = XLSX.utils.json_to_sheet(data);
 
     // Auto-width kolom
     const colWidths = Object.keys(data[0] ?? {}).map((key) => ({
-      wch: Math.max(key.length, ...data.map((row) => String((row as Record<string, unknown>)[key] ?? "").length)) + 2,
+      wch:
+        Math.max(
+          key.length,
+          ...data.map((row) => String(row[key] ?? "").length)
+        ) + 2,
     }));
     ws["!cols"] = colWidths;
 
@@ -647,7 +688,7 @@ function TransactionsPage() {
     const now = new Date();
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
     XLSX.writeFile(wb, `Transaksi_AMV_${stamp}.xlsx`);
-    toast.success(`${filtered.length} transaksi berhasil diekspor`);
+    toast.success(`${filtered.length} transaksi (${data.length} baris) berhasil diekspor`);
   }
 
   function openCreate(type: TxType) {
