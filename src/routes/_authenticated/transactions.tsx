@@ -650,21 +650,23 @@ function TransactionsPage() {
           "Status": status,
         });
       } else {
-        items.forEach((it, idx) => {
+        items.forEach((it) => {
+          const nominalValas = Number(it.foreign_amount || 0);
+          const kurs = Number(it.rate || 0);
+          const idrPerItem = IDR.format(Math.round(nominalValas * kurs));
+
           data.push({
-            // Kolom identitas transaksi hanya di baris pertama agar rapi,
-            // baris berikutnya di transaksi yang sama tetap diisi agar bisa di-filter di Excel
             "No. Transaksi": r.transaction_no,
-            "Tanggal": idx === 0 ? tanggal : "",
-            "Tipe": idx === 0 ? tipe : "",
-            "Cabang": idx === 0 ? cabang : "",
+            "Tanggal": tanggal,
+            "Tipe": tipe,
+            "Cabang": cabang,
             "Mata Uang": it.currencies?.code ?? "-",
-            "Nominal Valas": FMT(Number(it.foreign_amount || 0), 2),
-            "Kurs": FMT(Number(it.rate || 0), 2),
-            "Total IDR": idx === 0 ? totalIdr : "",
-            "Nasabah": idx === 0 ? nasabah : "",
-            "Kode Nasabah": idx === 0 ? kodeNasabah : "",
-            "Status": idx === 0 ? status : "",
+            "Nominal Valas": FMT(nominalValas, 2),
+            "Kurs": FMT(kurs, 2),
+            "Total IDR": idrPerItem,
+            "Nasabah": nasabah,
+            "Kode Nasabah": kodeNasabah,
+            "Status": status,
           });
         });
       }
