@@ -615,7 +615,7 @@ function CashPage() {
                         <div className="flex items-center justify-between gap-2 pt-1.5 border-t">
                           <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50 gap-1 text-[10px] font-mono px-1.5 py-0 h-5 flex-shrink-0">
                             <CheckCircle2 className="h-2.5 w-2.5" />
-                            Stok tersedia
+                            Sisa Stok
                           </Badge>
                           <span className="text-xs font-bold font-mono tabular-nums text-emerald-700 text-right">
                             {fmt(v.balance, v.decimals)}
