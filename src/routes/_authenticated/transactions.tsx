@@ -325,6 +325,7 @@ function TransactionsPage() {
   const [filterType, setFilterType] = useState<"all" | TxType>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | TxStatus>("all");
   const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [filterCurrency, setFilterCurrency] = useState<string>("all");
   const [dateMode, setDateMode] = useState<DateFilterMode>("all");
   const [customDate, setCustomDate] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
@@ -851,6 +852,15 @@ function TransactionsPage() {
         return false;
       if (filterStatus !== "all" && r.status !== filterStatus) return false;
 
+      // Currency filter: cek di currency_id header ATAU di transaction_items
+      if (filterCurrency !== "all") {
+        const inHeader = r.currency_id === filterCurrency;
+        const inItems = r.transaction_items?.some(
+          (it) => it.currency_id === filterCurrency
+        );
+        if (!inHeader && !inItems) return false;
+      }
+
       // Date filtering
       const rowDateStr = toLocalDateStr(r.transaction_date);
       if (dateMode === "today" && rowDateStr !== todayStr) return false;
@@ -873,12 +883,12 @@ function TransactionsPage() {
         (r.branches?.code && r.branches.code.toLowerCase().includes(q))
       );
     });
-  }, [rows, search, filterType, filterStatus, isSuperAdmin, filterBranch, dateMode, customDate, startDate, endDate]);
+  }, [rows, search, filterType, filterStatus, isSuperAdmin, filterBranch, filterCurrency, dateMode, customDate, startDate, endDate]);
 
   // Reset ke halaman 1 jika filter atau pencarian berubah
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filterType, filterStatus, filterBranch, dateMode, customDate, startDate, endDate]);
+  }, [search, filterType, filterStatus, filterBranch, filterCurrency, dateMode, customDate, startDate, endDate]);
 
   const totalRecords = filtered?.length ?? 0;
 
@@ -1198,6 +1208,26 @@ function TransactionsPage() {
             <SelectItem value="all">Semua status</SelectItem>
             <SelectItem value="completed">Selesai</SelectItem>
             <SelectItem value="voided">Dibatalkan</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Filter Mata Uang */}
+        <Select
+          value={filterCurrency}
+          onValueChange={(v) => setFilterCurrency(v)}
+        >
+          <SelectTrigger className="w-full sm:w-36">
+            <SelectValue placeholder="Semua Mata Uang" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Mata Uang</SelectItem>
+            {currencies
+              .filter((c) => c.code !== "IDR")
+              .map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.code} — {c.name}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>
