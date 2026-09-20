@@ -580,13 +580,13 @@ function CashPage() {
                 <p className="text-sm">Tidak ada valas yang tersedia untuk dijual saat ini.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {totals.valasSummary.map((v) => {
                   const flagUrl = getCurrencyFlagUrl(v.code);
                   return (
                     <div
                       key={v.code}
-                      className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm hover:shadow-md transition-shadow"
+                      className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
                     >
                       <div className="flex items-center gap-2 w-full pb-2 border-b">
                         <img
@@ -612,12 +612,13 @@ function CashPage() {
                           <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0"><ArrowUpCircle className="h-3 w-3 text-orange-500" /> Jual</span>
                           <span className="text-xs font-mono tabular-nums text-right">{fmt(v.totalSold, v.decimals)}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t">
-                          <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50 gap-1 text-[10px] font-mono px-1.5 py-0 h-5 flex-shrink-0">
+                        {/* Sisa Stok: label di atas, angka di bawah (full width) */}
+                        <div className="flex flex-col gap-1 pt-2 border-t">
+                          <Badge variant="outline" className="self-start text-emerald-600 border-emerald-300 bg-emerald-50 gap-1 text-[10px] font-mono px-2 py-0.5 h-5">
                             <CheckCircle2 className="h-2.5 w-2.5" />
                             Sisa Stok
                           </Badge>
-                          <span className="text-xs font-bold font-mono tabular-nums text-emerald-700 text-right">
+                          <span className="text-lg font-bold font-mono tabular-nums text-emerald-700 text-right w-full">
                             {fmt(v.balance, v.decimals)}
                           </span>
                         </div>
