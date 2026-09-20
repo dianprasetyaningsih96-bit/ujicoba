@@ -148,6 +148,7 @@ function CashPage() {
   const [balances, setBalances] = useState<Balance[] | null>(null);
   const [movements, setMovements] = useState<Movement[] | null>(null);
   const [transfers, setTransfers] = useState<BranchTransferInfo[]>([]);
+  const [valasRecap, setValasRecap] = useState<any[] | null>(null);
 
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -213,6 +214,7 @@ function CashPage() {
       { data: bal, error: e1 },
       { data: mv, error: e2 },
       { data: trfs, error: e3 },
+      { data: recap, error: e4 },
     ] = await Promise.all([
       balQ,
       mvQ,
@@ -222,12 +224,17 @@ function CashPage() {
           "id, branch_id, target_branch_id, currency_id, amount, status, notes, created_at, branch:branches!branch_transfers_branch_id_fkey(code, name), target_branch:branches!branch_transfers_target_branch_id_fkey(code, name)",
         )
         .eq("status", "accepted"),
+      isAll 
+        ? supabase.rpc("get_valas_recap") 
+        : supabase.rpc("get_valas_recap", { p_branch_id: bId }),
     ]);
     if (e1) toast.error("Gagal memuat saldo", { description: e1.message });
     if (e2) toast.error("Gagal memuat mutasi", { description: e2.message });
+    if (e4) toast.error("Gagal memuat rekap valas", { description: e4.message });
     setBalances((bal as Balance[]) ?? []);
     setMovements((mv as Movement[]) ?? []);
     setTransfers((trfs as unknown as BranchTransferInfo[]) ?? []);
+    setValasRecap(recap ?? []);
     setMovPage(1); // reset halaman saat cabang berganti
   }
 
@@ -376,13 +383,15 @@ function CashPage() {
           name: string;
           balance: number;
           decimals: number;
+          totalBought: number;
+          totalSold: number;
         }[],
       };
 
     let totalIdr = 0;
     const valasMap = new Map<
       string,
-      { code: string; name: string; balance: number; decimals: number }
+      { code: string; name: string; balance: number; decimals: number; totalBought: number; totalSold: number }
     >();
     const activeCurrencies = new Set<string>();
 
@@ -390,12 +399,12 @@ function CashPage() {
       const code = b.currencies?.code;
       if (!code) return;
       const bal = Number(b.balance) || 0;
-      if (bal !== 0) {
+      if (bal !== 0 || code !== "IDR") {
         activeCurrencies.add(code);
       }
       if (code === "IDR") {
         totalIdr += bal;
-      } else if (bal > 0) {
+      } else {
         const existing = valasMap.get(code);
         if (existing) {
           existing.balance += bal;
@@ -405,21 +414,45 @@ function CashPage() {
             name: b.currencies?.name ?? "",
             balance: bal,
             decimals: b.currencies?.decimals ?? 2,
+            totalBought: 0,
+            totalSold: 0,
           });
         }
       }
     });
 
-    const valasSummary = Array.from(valasMap.values()).sort((a, b) =>
-      a.code.localeCompare(b.code),
-    );
+    if (valasRecap) {
+      valasRecap.forEach((r) => {
+        const cur = currencies.find(c => c.id === r.currency_id);
+        if (cur && cur.code !== "IDR") {
+          const existing = valasMap.get(cur.code);
+          if (existing) {
+            existing.totalBought += Number(r.total_bought) || 0;
+            existing.totalSold += Number(r.total_sold) || 0;
+          } else {
+            valasMap.set(cur.code, {
+              code: cur.code,
+              name: cur.name,
+              balance: 0,
+              decimals: cur.decimals,
+              totalBought: Number(r.total_bought) || 0,
+              totalSold: Number(r.total_sold) || 0,
+            });
+          }
+        }
+      });
+    }
+
+    const valasSummary = Array.from(valasMap.values())
+      .filter(v => v.balance > 0 || v.totalBought > 0 || v.totalSold > 0)
+      .sort((a, b) => a.code.localeCompare(b.code));
 
     return {
       currencies: activeCurrencies.size,
       idrEquiv: totalIdr,
       valasSummary,
     };
-  }, [balances]);
+  }, [balances, valasRecap, currencies]);
 
   // Pagination mutasi terbaru (computed)
   const pagedMovements = useMemo(() => {
@@ -549,9 +582,9 @@ function CashPage() {
                   return (
                     <div
                       key={v.code}
-                      className="flex flex-col items-center justify-between gap-2 rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
+                      className="flex flex-col items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
                     >
-                      <div className="flex items-center gap-2 w-full">
+                      <div className="flex items-center gap-2 w-full pb-2 border-b">
                         <img
                           src={flagUrl}
                           alt={v.code}
@@ -565,16 +598,25 @@ function CashPage() {
                           <span className="text-[10px] text-muted-foreground line-clamp-1">{v.name}</span>
                         </div>
                       </div>
-                      <div className="w-full flex items-center justify-between mt-1">
-                        <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50 gap-1 text-xs font-mono px-2 py-0.5">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Siap Jual
-                        </Badge>
-                      </div>
-                      <div className="w-full text-right">
-                        <span className="text-lg font-bold font-mono tabular-nums">
-                          {fmt(v.balance, v.decimals)}
-                        </span>
+
+                      <div className="w-full flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1"><ArrowDownCircle className="h-3 w-3 text-blue-500" /> Beli</span>
+                          <span className="text-sm font-mono tabular-nums">{fmt(v.totalBought, v.decimals)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1"><ArrowUpCircle className="h-3 w-3 text-orange-500" /> Jual</span>
+                          <span className="text-sm font-mono tabular-nums">{fmt(v.totalSold, v.decimals)}</span>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50 gap-1 text-[10px] font-mono px-1.5 py-0 h-5">
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                            Siap
+                          </Badge>
+                          <span className="text-base font-bold font-mono tabular-nums text-emerald-700">
+                            {fmt(v.balance, v.decimals)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
