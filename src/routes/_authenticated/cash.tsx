@@ -616,20 +616,14 @@ function CashPage() {
                           <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0"><ArrowUpCircle className="h-3 w-3 text-orange-500" /> Jual</span>
                           <span className="text-xs font-mono tabular-nums text-right">{fmt(v.totalSold, v.decimals)}</span>
                         </div>
-                        {v.balance - (v.totalBought - v.totalSold) !== 0 && (
-                          <div className="flex items-center justify-between gap-2 pb-1">
-                            <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0" title="Saldo Awal, Transfer, atau Penyesuaian Manual">Lainnya</span>
-                            <span className="text-xs font-mono tabular-nums text-right text-muted-foreground">{fmt(v.balance - (v.totalBought - v.totalSold), v.decimals)}</span>
-                          </div>
-                        )}
                         {/* Sisa Stok: label di atas, angka di bawah (full width) */}
                         <div className="flex flex-col gap-1 pt-2 border-t">
                           <Badge variant="outline" className="self-start text-emerald-600 border-emerald-300 bg-emerald-50 gap-1 text-[10px] font-mono px-2 py-0.5 h-5">
-                            <CheckCircle2 className="h-2.5 w-2.5" />
+                            <CheckCircle2 className="h-3 w-3" />
                             Sisa Stok
                           </Badge>
                           <span className="text-lg font-bold font-mono tabular-nums text-emerald-700 text-right w-full">
-                            {fmt(v.balance, v.decimals)}
+                            {fmt(v.totalBought - v.totalSold, v.decimals)}
                           </span>
                         </div>
                       </div>
