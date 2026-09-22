@@ -662,13 +662,14 @@ export function RateBoardPage() {
             <style>
               {`
                 @keyframes force-marquee {
-                  0% { transform: translateX(100vw); }
+                  0% { transform: translateX(0); }
                   100% { transform: translateX(-100%); }
                 }
                 .marquee-text-force {
                   display: inline-block;
                   white-space: nowrap;
-                  animation: force-marquee 45s linear infinite;
+                  padding-left: 100%;
+                  animation: force-marquee 35s linear infinite;
                 }
               `}
             </style>
