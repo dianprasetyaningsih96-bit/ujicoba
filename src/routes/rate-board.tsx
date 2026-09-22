@@ -659,9 +659,9 @@ export function RateBoardPage() {
 
           {/* Marquee Ticker */}
           <div className="mx-6 flex-1 overflow-hidden">
-            <div className="whitespace-nowrap text-xs md:text-sm font-semibold tracking-wide text-slate-300 animate-pulse">
+            <marquee className="whitespace-nowrap text-xs md:text-sm font-semibold tracking-wide text-slate-300">
               ★ {settings.company_name ? `${settings.company_name.toUpperCase()} • ` : ""}KURS DAPAT BERUBAH SEWAKTU-WAKTU MENGIKUTI PERGERAKAN PASAR VALAS INTERNASIONAL • TRANSAKSI AMAN, RESMI BERIZIN BANK INDONESIA • TERIMA PENUKARAN MATA UANG UTAMA DUNIA ★
-            </div>
+            </marquee>
           </div>
 
           {/* Live Sync Status */}
