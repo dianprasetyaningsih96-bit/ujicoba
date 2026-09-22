@@ -662,7 +662,7 @@ export function RateBoardPage() {
             <style>
               {`
                 @keyframes force-marquee {
-                  0% { transform: translateX(100%); }
+                  0% { transform: translateX(100vw); }
                   100% { transform: translateX(-100%); }
                 }
                 .marquee-text-force {
