@@ -658,10 +658,23 @@ export function RateBoardPage() {
           </div>
 
           {/* Marquee Ticker */}
-          <div className="mx-6 flex-1 overflow-hidden flex items-center h-full">
-            <marquee scrollamount="5" className="text-xs md:text-sm font-semibold tracking-wide text-slate-300">
+          <div className="mx-6 flex-1 overflow-hidden flex items-center h-full relative">
+            <style>
+              {`
+                @keyframes force-marquee {
+                  0% { transform: translateX(100%); }
+                  100% { transform: translateX(-100%); }
+                }
+                .marquee-text-force {
+                  display: inline-block;
+                  white-space: nowrap;
+                  animation: force-marquee 25s linear infinite;
+                }
+              `}
+            </style>
+            <div className="marquee-text-force text-xs md:text-sm font-semibold tracking-wide text-slate-300">
               ★ {settings.company_name ? `${settings.company_name.toUpperCase()} • ` : ""}KURS DAPAT BERUBAH SEWAKTU-WAKTU MENGIKUTI PERGERAKAN PASAR VALAS INTERNASIONAL • TRANSAKSI AMAN, RESMI BERIZIN BANK INDONESIA • TERIMA PENUKARAN MATA UANG UTAMA DUNIA ★
-            </marquee>
+            </div>
           </div>
 
           {/* Live Sync Status */}
