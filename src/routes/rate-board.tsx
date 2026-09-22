@@ -668,7 +668,7 @@ export function RateBoardPage() {
                 .marquee-text-force {
                   display: inline-block;
                   white-space: nowrap;
-                  animation: force-marquee 25s linear infinite;
+                  animation: force-marquee 45s linear infinite;
                 }
               `}
             </style>
