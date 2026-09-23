@@ -121,7 +121,7 @@ function ShiftsPage() {
   const { settings } = useAppSettings();
   const isSuperAdmin = hasAnyRole(roles, ["super_admin", "owner"]);
   const isManager = isSuperAdmin || hasAnyRole(roles, ["branch_manager"]);
-  const canSelectBranch = isSuperAdmin || hasAnyRole(roles, ["branch_manager"]);
+  const canSelectBranch = isSuperAdmin;
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -165,8 +165,14 @@ function ShiftsPage() {
           .order("opened_at", { ascending: false });
         
         // Filter by branch
-        if (!isSuperAdmin && profile?.branch_id) {
-          query = query.eq("branch_id", profile.branch_id);
+        if (!isSuperAdmin) {
+          // Strictly enforce branch isolation for Teller and Branch Manager
+          if (profile?.branch_id) {
+            query = query.eq("branch_id", profile.branch_id);
+          } else {
+            // If they don't have a branch assigned, they shouldn't see any shifts
+            query = query.eq("branch_id", "00000000-0000-0000-0000-000000000000");
+          }
         } else if (targetBranch && targetBranch !== "all") {
           query = query.eq("branch_id", targetBranch);
         }
