@@ -117,7 +117,7 @@ function getMonthRangeISO(ymStr: string) {
 }
 
 function ShiftsPage() {
-  const { user, profile, roles } = useCurrentUser();
+  const { user, profile, roles, loading: loadingUser } = useCurrentUser();
   const { settings } = useAppSettings();
   const isSuperAdmin = hasAnyRole(roles, ["super_admin", "owner"]);
   const isManager = isSuperAdmin || hasAnyRole(roles, ["branch_manager"]);
@@ -244,8 +244,12 @@ function ShiftsPage() {
   }, [user?.id, isSuperAdmin, profile?.branch_id, filterBranch, dateMode, customDate, startDate, endDate]);
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!loadingUser) {
+      const correctBranch = isSuperAdmin ? "all" : (profile?.branch_id ?? "all");
+      setFilterBranch(correctBranch);
+      load(correctBranch);
+    }
+  }, [loadingUser]);
 
   // Filtered shifts according to search and status
   const filteredShifts = useMemo(() => {
